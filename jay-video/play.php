@@ -60,7 +60,7 @@ if ($isForeign && $audio === 'zh') $keyword = $title . ' 国语';
 $res = ['ok' => false, 'err' => ''];
 $episodes = [];
 if ($source) {
-    $res = resolve_play($source, $keyword, $type === 'tv' ? $episode : 0);
+    $res = resolve_play($source, $keyword, $type === 'tv' ? $episode : 0, $type === 'tv' ? $season : 1);
     if ($res['ok']) $episodes = $res['episodes'];
 }
 
@@ -68,9 +68,23 @@ $playerUrl = $res['ok'] ? build_player_url($res['url']) : '';
 $epName = $res['ok'] ? ($res['label'] ?: ('第' . $episode . '集')) : '';
 $lastHist = history_latest((int)$U['id'], $id, $type);
 
+/* 剧集季列表（供播放页直接切换季） */
+$tvSeasons = [];
+if ($type === 'tv' && is_array($media)) {
+    foreach (($media['seasons'] ?? []) as $s) {
+        if ((int)($s['episode_count'] ?? 0) === 0 && (int)($s['season_number'] ?? 0) > 0) continue;
+        $tvSeasons[] = [
+            'num'  => (int)($s['season_number'] ?? 1),
+            'name' => ($s['name'] ?? '') !== '' ? $s['name'] : ('第 ' . (int)($s['season_number'] ?? 1) . ' 季'),
+        ];
+    }
+}
+
 $playBase = 'play.php?type=' . $type . '&id=' . $id
     . ($type === 'tv' ? '&season=' . $season : '')
     . ($audio ? '&audio=' . $audio : '');
+/* 不带季的基础链接（季切换用） */
+$playBaseNoSeason = 'play.php?type=' . $type . '&id=' . $id . ($audio ? '&audio=' . $audio : '');
 $PAGE_TITLE = $title . ' 在线播放 - ' . site_name();
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -99,6 +113,23 @@ require_once __DIR__ . '/includes/header.php';
     </div>
     <?php endif; ?>
   </div>
+
+  <?php if ($type === 'tv' && count($tvSeasons) > 1): ?>
+  <div class="ep-panel">
+    <div class="section-head">
+      <h2 class="section-title">季切换</h2>
+      <span style="font-size:12.5px;color:var(--text-3)">共 <?= count($tvSeasons) ?> 季 · 切换后自动匹配对应播放资源</span>
+    </div>
+    <div class="season-bar">
+      <?php foreach ($tvSeasons as $s): ?>
+      <a class="season-pill <?= (int)$s['num'] === $season ? 'active' : '' ?>"
+         href="<?= u($playBaseNoSeason . '&season=' . (int)$s['num'] . '&episode=1' . ($sourceId ? '&source=' . $sourceId : '')) ?>">
+        <?= e($s['name']) ?>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
 
   <?php if ($res['ok']): ?>
   <div class="player-box">

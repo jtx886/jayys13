@@ -200,11 +200,51 @@ function valid_media_url(string $url, array $source): bool
     return true;
 }
 
+/* ---------- 季数识别 ---------- */
+
+/** 中文数字（一 ~ 九十九）转阿拉伯数字 */
+function season_cn_num(string $cn): int
+{
+    $map = ['一' => 1, '二' => 2, '三' => 3, '四' => 4, '五' => 5, '六' => 6, '七' => 7, '八' => 8, '九' => 9];
+    if ($cn === '十') return 10;
+    if (strpos($cn, '十') !== false) {
+        [$a, $b] = array_pad(explode('十', $cn), 2, '');
+        return ($a === '' ? 1 : ($map[$a] ?? 0)) * 10 + ($b === '' ? 0 : ($map[$b] ?? 0));
+    }
+    return $map[$cn] ?? 0;
+}
+
 /**
- * 解析媒体真实播放地址
+ * 解析资源条目名称中的季数（用于多季剧集匹配）
+ * 支持「第2季 / 第二季 / 第2部 / S02 / Season 2 / Ⅱ / II / 纯数字后缀」等标识
+ * @return int 季数；无季标识返回 0
+ */
+function name_season_num(string $name, string $title): int
+{
+    $rest = trim($name);
+    if ($title !== '' && mb_strpos($rest, $title) === 0) {
+        $rest = trim(mb_substr($rest, mb_strlen($title)));
+    }
+    if ($rest === '') return 0;
+    if (preg_match('/第\s*(\d{1,2})\s*[季部]/u', $rest, $m)) return (int)$m[1];
+    if (preg_match('/第\s*([一二三四五六七八九十]{1,3})\s*[季部]/u', $rest, $m)) return season_cn_num($m[1]);
+    if (preg_match('/(?:S|Season[\s.]*)0*(\d{1,2})(?!\d)/i', $rest, $m)) return (int)$m[1];
+    $roman = ['Ⅰ' => 1, 'Ⅱ' => 2, 'Ⅲ' => 3, 'Ⅳ' => 4, 'Ⅴ' => 5, 'Ⅵ' => 6, 'Ⅶ' => 7, 'Ⅷ' => 8, 'Ⅸ' => 9, 'Ⅹ' => 10];
+    if (preg_match('/[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]/u', $rest, $m)) return $roman[$m[0]] ?? 0;
+    if (preg_match('/(?:^|\s)(II|III|IV|V|VI|VII|VIII|IX|X)(?:$|\s)/', $rest, $m)) {
+        $ascii = ['I' => 1, 'II' => 2, 'III' => 3, 'IV' => 4, 'V' => 5, 'VI' => 6, 'VII' => 7, 'VIII' => 8, 'IX' => 9, 'X' => 10];
+        return $ascii[strtoupper($m[1])] ?? 0;
+    }
+    // 纯数字后缀（如「庆余年2」）
+    if (preg_match('/^0*(\d{1,2})$/', $rest, $m)) return (int)$m[1];
+    return 0;
+}
+
+/**
+ * 解析媒体真实播放地址（支持按季匹配资源条目）
  * @return array {ok, url, label, episodes, name, err}
  */
-function resolve_play(array $source, string $title, int $episode): array
+function resolve_play(array $source, string $title, int $episode, int $season = 1): array
 {
     $fail = function (string $err) {
         return ['ok' => false, 'url' => '', 'label' => '', 'episodes' => [], 'name' => '', 'err' => $err];
@@ -212,27 +252,63 @@ function resolve_play(array $source, string $title, int $episode): array
     $title = trim($title);
     if ($title === '') return $fail('片名不能为空');
     if (!$source) return $fail('暂无可用播放源，请联系管理员');
+    if ($season < 1) $season = 1;
 
     $list = source_search($source, $title);
+    if (!$list && $season > 1) {
+        // 主标题搜不到时，用带季名的关键词再搜一次
+        foreach (["第{$season}季", "第{$season}部"] as $suffix) {
+            $list = source_search($source, $title . ' ' . $suffix);
+            if ($list) break;
+        }
+    }
     if (!$list) return $fail('播放源未收录《' . $title . '》');
 
-    // 精确匹配 → 包含匹配 → 名称去掉年份匹配
-    $item = null;
+    // 标题相关度分级：精确匹配 → 包含匹配 → 去后缀包含匹配
+    $pureTitle = (string)preg_replace('/\s*(国语|普通话|粤语|高清|完整|版)*$/u', '', $title);
+    $exact = $contains = $loose = [];
     foreach ($list as $it) {
-        if ($it['name'] === $title) { $item = $it; break; }
+        if ($it['name'] === $title) { $exact[] = $it; continue; }
+        if (mb_strpos($it['name'], $title) !== false) { $contains[] = $it; continue; }
+        if ($pureTitle !== '' && mb_strpos($it['name'], $pureTitle) !== false) { $loose[] = $it; }
     }
-    if (!$item) {
-        foreach ($list as $it) {
-            if (mb_strpos($it['name'], $title) !== false) { $item = $it; break; }
+    $candidates = $exact ?: ($contains ?: $loose);
+    if (!$candidates) $candidates = $list;
+    // 全量相关条目池（季匹配用：精确匹配会排除其他季的条目，故单独合并）
+    $pool = array_merge($exact, $contains, $loose) ?: $list;
+
+    $item = null;
+    if ($season > 1) {
+        // 多季剧集：在全部相关条目中找季标识一致的（优先非粤语版本）
+        foreach ([false, true] as $allowYue) {
+            foreach ($pool as $it) {
+                if (!$allowYue && mb_strpos($it['name'], '粤语') !== false) continue;
+                if (name_season_num($it['name'], $title) === $season) { $item = $it; break 2; }
+            }
+        }
+        if (!$item) {
+            // 相关条目里没有对应季：带季名重新搜索一次
+            foreach (["第{$season}季", "第{$season}部"] as $suffix) {
+                $sub = source_search($source, $title . ' ' . $suffix);
+                foreach ($sub as $it) {
+                    if (name_season_num($it['name'], $title) === $season) { $item = $it; break 2; }
+                }
+            }
         }
     }
     if (!$item) {
-        $pureTitle = preg_replace('/\s*(国语|普通话|粤语|高清|完整|版)*$/u', '', $title);
-        foreach ($list as $it) {
-            if (mb_strpos($it['name'], $pureTitle) !== false) { $item = $it; break; }
+        // 常规匹配：优先季标识一致，其次（第 1 季）无季标识条目
+        $unmarked = [];
+        foreach ($candidates as $it) {
+            $sn = name_season_num($it['name'], $title);
+            if ($sn === $season) { $item = $it; break; }
+            if ($sn === 0) $unmarked[] = $it;
+        }
+        if (!$item && $season === 1 && $unmarked) {
+            $item = $unmarked[0]; // 第 1 季优先无季标识的条目
         }
     }
-    if (!$item) $item = $list[0];
+    if (!$item) $item = $candidates[0]; // 兜底：部分资源站将多季合并为一条
 
     // 无播放串则拉详情
     if ($item['play'] === '' && $item['id'] !== '') {

@@ -18,6 +18,7 @@ $PAGE_TITLE = $PAGE_TITLE ?? site_name() . ' - 暗夜观影，光影随行';
 <header class="navbar">
   <div class="container navbar-inner">
     <a class="logo" href="<?= u('index.php') ?>">
+      <span class="logo-mark"><i class="logo-play"></i></span>
       <span class="logo-text"><?= e(site_name()) ?></span>
     </a>
     <nav class="nav-menu" id="nav-menu">
