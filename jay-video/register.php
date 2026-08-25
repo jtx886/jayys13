@@ -53,7 +53,7 @@ require_once __DIR__ . '/includes/header.php';
 
       <?php if ($error): ?>
         <div class="auth-banner" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:#fca5a5">
-          <i class="ic ic-info"></i><span><?= e($error) ?></span>
+          <span><?= e($error) ?></span>
         </div>
       <?php endif; ?>
 
@@ -83,7 +83,7 @@ require_once __DIR__ . '/includes/header.php';
           <label>确认密码 <span class="req">*</span></label>
           <input class="input" type="password" name="confirm" placeholder="再次输入密码" required>
         </div>
-        <button class="btn btn-primary btn-block btn-lg" type="submit"><i class="ic ic-check"></i>注 册</button>
+        <button class="btn btn-primary btn-block btn-lg" type="submit">注 册</button>
       </form>
       <div class="auth-links">已有账号？<a href="<?= u('login.php') ?>">立即登录</a></div>
     </div>
@@ -93,9 +93,9 @@ require_once __DIR__ . '/includes/header.php';
       <h2>加入<?= e(site_name()) ?><br>好片一网打尽</h2>
       <p>注册即享多播放源解析、剧集季切换、观看进度保存、个性化收藏夹与公开反馈社区。</p>
       <div class="aq-features">
-        <span class="aq-feat"><i class="ic ic-mail"></i>邮箱验证</span>
-        <span class="aq-feat"><i class="ic ic-heart"></i>收藏夹</span>
-        <span class="aq-feat"><i class="ic ic-chat"></i>反馈社区</span>
+        <span class="aq-feat">邮箱验证</span>
+        <span class="aq-feat">收藏夹</span>
+        <span class="aq-feat">反馈社区</span>
       </div>
     </div>
   </div>

@@ -32,7 +32,7 @@ $media = tmdb_get("/{$type}/{$id}", ['append_to_response' => 'credits'], 3600);
 if (!$media) {
     $PAGE_TITLE = '未找到影片 - ' . site_name();
     require_once __DIR__ . '/includes/header.php';
-    echo '<div class="container"><div class="empty" style="margin-top:80px"><div class="empty-icon"><i class="ic ic-info"></i></div><p>无法获取影视信息（可能未配置 TMDB API Key 或资源不存在）</p><a class="btn btn-primary" href="' . u('index.php') . '">回到首页</a></div></div>';
+    echo '<div class="container"><div class="empty" style="margin-top:80px"><div class="empty-icon"></div><p>无法获取影视信息（可能未配置 TMDB API Key 或资源不存在）</p><a class="btn btn-primary" href="' . u('index.php') . '">回到首页</a></div></div>';
     require_once __DIR__ . '/includes/footer.php';
     exit;
 }
@@ -124,7 +124,7 @@ require_once __DIR__ . '/includes/header.php';
         <h1 class="detail-title"><?= e($title) ?></h1>
         <?php if ($origTitle && $origTitle !== $title): ?><div class="detail-orig"><?= e($origTitle) ?></div><?php endif; ?>
         <div class="detail-meta">
-          <?php if ($score): ?><span class="score"><i class="ic ic-star"></i><?= $score ?></span><?php endif; ?>
+          <?php if ($score): ?><span class="score">评分 <?= $score ?></span><?php endif; ?>
           <span><?= e($year) ?></span>
           <span><?= $type === 'movie' ? '电影' : '剧集' ?></span>
           <?php if ($runtime): ?><span><?= e($runtime) ?></span><?php endif; ?>
@@ -134,20 +134,20 @@ require_once __DIR__ . '/includes/header.php';
         <div class="detail-btns">
           <?php if ($lastHist): ?>
           <a class="btn btn-green" href="<?= u('play.php?type=' . $type . '&id=' . $id . '&season=' . (int)$lastHist['season'] . '&episode=' . (int)$lastHist['episode'] . $audioQ) ?>">
-            <i class="ic ic-play"></i>继续观看 <?= $type === 'tv' ? '第' . (int)$lastHist['episode'] . '集' : '' ?>
+            继续观看 <?= $type === 'tv' ? '第' . (int)$lastHist['episode'] . '集' : '' ?>
           </a>
           <?php else: ?>
-          <a class="btn btn-primary btn-lg" href="<?= $playUrl ?>"><i class="ic ic-play"></i>立即播放</a>
+          <a class="btn btn-primary btn-lg" href="<?= $playUrl ?>">立即播放</a>
           <?php endif; ?>
           <form method="post" action="<?= u('detail.php?type=' . $type . '&id=' . $id . ($type === 'tv' ? '&season=' . $curSeason : '') . $audioQ) ?>" style="display:inline">
             <?= csrf_field() ?>
             <input type="hidden" name="act" value="fav">
             <?php if ($U): ?>
             <button class="btn <?= $isFav ? 'btn-primary' : 'btn-ghost' ?> btn-lg" type="submit">
-              <i class="ic ic-heart <?= $isFav ? 'on' : '' ?>"></i><?= $isFav ? '已收藏' : '收藏' ?>
+              <?= $isFav ? '已收藏' : '收藏' ?>
             </button>
             <?php else: ?>
-            <a class="btn btn-ghost btn-lg" href="<?= u('login.php?from=play') ?>"><i class="ic ic-heart"></i>收藏</a>
+            <a class="btn btn-ghost btn-lg" href="<?= u('login.php?from=play') ?>">收藏</a>
             <?php endif; ?>
           </form>
         </div>
@@ -162,7 +162,7 @@ require_once __DIR__ . '/includes/header.php';
       <a class="<?= $audio === 'orig' ? 'active' : '' ?>" href="<?= u('detail.php?type=' . $type . '&id=' . $id . ($type === 'tv' ? '&season=' . $curSeason : '') . '&audio=orig') ?>">原版</a>
       <a class="<?= $audio === 'zh' ? 'active' : '' ?>" href="<?= u('detail.php?type=' . $type . '&id=' . $id . ($type === 'tv' ? '&season=' . $curSeason : '') . '&audio=zh') ?>">普通话</a>
     </div>
-    <span style="font-size:12px;color:var(--text-3)"><i class="ic ic-info" style="width:13px;height:13px"></i> 海外影视支持配音切换，播放时自动匹配对应资源</span>
+    <span style="font-size:12px;color:var(--text-3)">海外影视支持配音切换，播放时自动匹配对应资源</span>
   </div>
   <?php endif; ?>
 
@@ -184,7 +184,7 @@ require_once __DIR__ . '/includes/header.php';
 
     <div class="season-info">
       <div class="si-score">
-        <b><i class="ic ic-star"></i><?= round((float)($seasonData['vote_average'] ?? 0), 1) ?></b>
+        <b>评分 <?= round((float)($seasonData['vote_average'] ?? 0), 1) ?></b>
         <span>本季评分</span>
       </div>
       <div class="si-main">
@@ -204,13 +204,13 @@ require_once __DIR__ . '/includes/header.php';
         <div class="ep-thumb">
           <img src="<?= e(tmdb_img($ep['still_path'] ?? null, 'w300') ?: $backdrop) ?>" alt="<?= e($ep['name'] ?? ('第' . $en . '集')) ?>" data-fade loading="lazy">
           <span class="ep-num">第 <?= $en ?> 集</span>
-          <?php if (!empty($ep['vote_average'])): ?><span class="ep-score"><i class="ic ic-star"></i><?= round((float)$ep['vote_average'], 1) ?></span><?php endif; ?>
-          <span class="ep-play"><i class="ic ic-play"></i></span>
+          <?php if (!empty($ep['vote_average'])): ?><span class="ep-score">评分 <?= round((float)$ep['vote_average'], 1) ?></span><?php endif; ?>
+          <span class="ep-play">播放</span>
         </div>
         <div class="ep-body">
           <h5><?= e($ep['name'] ?? ('第' . $en . '集')) ?></h5>
           <p><?= e($ep['overview'] ?? '暂无单集简介') ?></p>
-          <span class="ep-date"><i class="ic ic-calendar"></i><?= e($ep['air_date'] ?? '待定') ?></span>
+          <span class="ep-date"><?= e($ep['air_date'] ?? '待定') ?></span>
         </div>
       </a>
       <?php endforeach; ?>

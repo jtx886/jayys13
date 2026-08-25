@@ -16,12 +16,12 @@ if (!is_logged_in()) {
     ?>
     <div class="login-wall">
       <div class="login-wall-card">
-        <div class="login-wall-icon"><i class="ic ic-lock"></i></div>
+        <div class="login-wall-icon">会员专属</div>
         <h2>需要登录才可以观看哦，如没有账号请注册！</h2>
         <p>登录后即可播放《<?= e($_GET['t'] ?? '精彩影片') ?>》并同步观看进度</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-          <a class="btn btn-primary btn-lg" href="<?= u('login.php?from=play') ?>"><i class="ic ic-user"></i>去登录</a>
-          <a class="btn btn-ghost btn-lg" href="<?= u('register.php') ?>"><i class="ic ic-plus"></i>免费注册</a>
+          <a class="btn btn-primary btn-lg" href="<?= u('login.php?from=play') ?>">去登录</a>
+          <a class="btn btn-ghost btn-lg" href="<?= u('register.php') ?>">免费注册</a>
         </div>
         <p style="margin-top:18px;font-size:12px;color:var(--text-3)"><span id="lw-count">3</span> 秒后自动跳转登录页…</p>
       </div>
@@ -78,7 +78,7 @@ require_once __DIR__ . '/includes/header.php';
   <div class="player-top">
     <div>
       <div class="player-title">
-        <a class="icon-btn" href="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>" title="返回详情"><i class="ic ic-arrow-l"></i></a>
+        <a class="icon-btn" href="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>" title="返回详情">返回</a>
         <a href="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>" style="font-size:20px;font-weight:800"><?= e($title) ?></a>
         <?php if ($type === 'tv'): ?><span class="tag">S<?= $season ?>E<?= $episode ?></span><?php endif; ?>
         <?php if ($isForeign && $audio === 'zh'): ?><span class="tag" style="color:var(--primary-2);border-color:var(--primary-30)">普通话配音</span>
@@ -91,9 +91,9 @@ require_once __DIR__ . '/includes/header.php';
       <form method="post" action="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>" style="display:inline">
         <?= csrf_field() ?><input type="hidden" name="act" value="fav">
         <?php if (fav_exists((int)$U['id'], $id, $type)): ?>
-        <button class="btn btn-primary btn-sm" type="submit"><i class="ic ic-heart on"></i>已收藏</button>
+        <button class="btn btn-primary btn-sm" type="submit">已收藏</button>
         <?php else: ?>
-        <button class="btn btn-ghost btn-sm" type="submit"><i class="ic ic-heart"></i>收藏</button>
+        <button class="btn btn-ghost btn-sm" type="submit">收藏</button>
         <?php endif; ?>
       </form>
     </div>
@@ -102,16 +102,16 @@ require_once __DIR__ . '/includes/header.php';
 
   <?php if ($res['ok']): ?>
   <div class="player-box">
-    <div class="player-loading" id="player-loading"><i class="ic ic-spin"></i><span>播放器加载中，请稍候…</span></div>
+    <div class="player-loading" id="player-loading"><span>播放器加载中，请稍候…</span></div>
     <iframe id="jay-player" src="<?= e($playerUrl) ?>" allowfullscreen allow="autoplay; fullscreen; encrypted-media" referrerpolicy="no-referrer" scrolling="no"></iframe>
   </div>
   <script>setTimeout(function(){var l=document.getElementById('player-loading');if(l)l.style.display='none';},6000);</script>
 
   <div class="player-meta-bar">
-    <span class="pmb-item"><i class="ic ic-film"></i><?= $type === 'movie' ? '正片' : e($epName) ?></span>
-    <span class="pmb-item"><i class="ic ic-clock"></i>观看时长：<b id="wk-time" style="color:var(--green)">0秒</b>（自动记录）</span>
+    <span class="pmb-item"><?= $type === 'movie' ? '正片' : e($epName) ?></span>
+    <span class="pmb-item">观看时长：<b id="wk-time" style="color:var(--green)">0秒</b>（自动记录）</span>
     <?php if ($lastHist): ?>
-    <span class="pmb-item"><i class="ic ic-eye"></i>上次观看：<?= e($lastHist['title']) ?><?= $type === 'tv' ? ' 第' . (int)$lastHist['episode'] . '集' : '' ?> · <?= e(format_seconds((int)$lastHist['position_seconds'])) ?></span>
+    <span class="pmb-item">上次观看：<?= e($lastHist['title']) ?><?= $type === 'tv' ? ' 第' . (int)$lastHist['episode'] . '集' : '' ?> · <?= e(format_seconds((int)$lastHist['position_seconds'])) ?></span>
     <?php endif; ?>
   </div>
 
@@ -188,14 +188,13 @@ require_once __DIR__ . '/includes/header.php';
 
   <?php else: ?>
   <div class="play-err">
-    <i class="ic ic-info"></i>
-    <h3>抱歉，本片暂时无法解析播放地址</h3>
+        <h3>抱歉，本片暂时无法解析播放地址</h3>
     <p><?= e($res['err'] ?: '播放源暂未收录本片，可尝试切换其他线路') ?></p>
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
       <?php foreach ($sources as $s): if ($source && (int)$s['id'] === (int)$source['id']) continue; ?>
-      <a class="btn btn-ghost" href="<?= u($playBase . '&episode=' . $episode . '&source=' . (int)$s['id']) ?>"><i class="ic ic-db"></i>切换到 <?= e($s['name']) ?></a>
+      <a class="btn btn-ghost" href="<?= u($playBase . '&episode=' . $episode . '&source=' . (int)$s['id']) ?>">切换到 <?= e($s['name']) ?></a>
       <?php endforeach; ?>
-      <a class="btn btn-primary" href="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>"><i class="ic ic-arrow-l"></i>返回详情</a>
+      <a class="btn btn-primary" href="<?= u('detail.php?type=' . $type . '&id=' . $id) ?>">返回详情</a>
     </div>
   </div>
   <?php endif; ?>

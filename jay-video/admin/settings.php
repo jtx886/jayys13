@@ -36,7 +36,7 @@ $presets  = ['#e50914', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
 
 <div class="dash-grid">
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-sliders"></i>基本设置</h3></div>
+    <div class="panel-head"><h3>基本设置</h3></div>
     <div class="panel-body">
       <form method="post" action="<?= u('admin/settings.php') ?>">
         <?= csrf_field() ?>
@@ -64,13 +64,13 @@ $presets  = ['#e50914', '#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '
           <p class="form-hint">数据接口代理：api.tmdb.org · 图片代理：images.tmdb.org/t/p · 留空则前台不展示影视内容</p>
         </div>
 
-        <button class="btn btn-primary btn-block" type="submit"><i class="ic ic-check"></i>保存设置</button>
+        <button class="btn btn-primary btn-block" type="submit">保存设置</button>
       </form>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-info"></i>系统信息</h3></div>
+    <div class="panel-head"><h3>系统信息</h3></div>
     <div class="panel-body">
       <table class="tbl" style="min-width:0">
         <tbody>

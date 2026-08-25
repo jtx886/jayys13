@@ -278,8 +278,6 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 .wrap{width:100%;max-width:560px;animation:up .5s ease}
 @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 .logo{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:28px}
-.logo-mark{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--primary),#ff5a45);display:flex;align-items:center;justify-content:center;position:relative}
-.logo-mark::after{content:"";width:0;height:0;border-left:14px solid #fff;border-top:9px solid transparent;border-bottom:9px solid transparent;margin-left:4px}
 .logo h1{font-size:26px;font-weight:700}
 .logo span{color:var(--primary)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
@@ -289,8 +287,6 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 .env{margin-bottom:22px}
 .env-row{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:var(--panel2);border-radius:8px;margin-bottom:8px;font-size:13px}
 .env-row .st{display:inline-flex;align-items:center;gap:6px;font-size:12px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.dot.no{background:var(--err);box-shadow:0 0 8px var(--err)}
 .env-row .st.no{color:var(--err)}
 .fgroup{margin-bottom:16px}
 .fgroup label{display:block;font-size:13px;color:var(--text2);margin-bottom:6px}
@@ -304,11 +300,7 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 .btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(229,9,20,.4)}
 .btn:active{transform:none}
 .okbox{text-align:center;padding:20px 0}
-.okicon{width:72px;height:72px;border-radius:50%;background:rgba(46,204,113,.12);border:2px solid var(--ok);margin:0 auto 18px;display:flex;align-items:center;justify-content:center;animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
 @keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
-.okicon::before,.okicon::after{content:"";position:absolute;width:6px;height:32px;background:var(--ok);border-radius:3px}
-.okicon::before{transform:rotate(45deg) translate(-6px,-6px)}
-.okicon::after{transform:rotate(-45deg) translate(6px,6px)}
 .okbox h2{font-size:20px;margin-bottom:8px}
 .okbox p{color:var(--text2);font-size:14px;margin-bottom:22px}
 .gobtn{display:inline-block;padding:12px 36px;border-radius:10px;background:linear-gradient(135deg,var(--primary),#ff4d3d);color:#fff;text-decoration:none;font-weight:600;transition:transform .2s,box-shadow .2s}
@@ -320,14 +312,12 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 <body>
 <div class="wrap">
   <div class="logo">
-    <div class="logo-mark"></div>
     <h1>Jay<span>影视</span></h1>
   </div>
 
   <div class="card">
     <?php if ($done): ?>
     <div class="okbox">
-      <div class="okicon"></div>
       <h2>安装完成</h2>
       <p>数据库表已创建，配置文件已生成，安装入口已自动销毁。<br>管理员账号：<b><?= h($doneAdmin) ?></b></p>
       <a class="gobtn" href="index.php">进入首页</a>

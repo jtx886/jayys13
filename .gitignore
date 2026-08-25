@@ -1,0 +1,6 @@
+# 本地运行时生成（含数据库凭据，勿提交）
+jay-video/includes/config.php
+jay-video/install.lock
+
+# 上传与缓存
+jay-video/uploads/

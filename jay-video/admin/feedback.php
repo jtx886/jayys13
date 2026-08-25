@@ -53,11 +53,11 @@ $list = db_q(
           <td><span class="tag-green"><?= (int)$f['rc'] ?> 条</span><?= (int)$f['myrc'] > 0 ? '<div class="t-sub">已回复</div>' : '' ?></td>
           <td style="color:var(--text-3)"><?= e($f['created_at']) ?></td>
           <td style="text-align:right">
-            <a class="btn btn-primary btn-xs" href="<?= u('admin/feedback_view.php?id=' . (int)$f['id']) ?>"><i class="ic ic-chat"></i>查看 / 回复</a>
+            <a class="btn btn-primary btn-xs" href="<?= u('admin/feedback_view.php?id=' . (int)$f['id']) ?>">查看 / 回复</a>
             <form method="post" action="<?= u('admin/feedback.php') ?>" style="display:inline" data-confirm="删除该反馈将同时删除全部回复与点赞，确定吗？">
               <?= csrf_field() ?>
               <input type="hidden" name="act" value="del"><input type="hidden" name="fid" value="<?= (int)$f['id'] ?>">
-              <button class="btn btn-danger btn-xs" type="submit"><i class="ic ic-trash"></i>删除</button>
+              <button class="btn btn-danger btn-xs" type="submit">删除</button>
             </form>
           </td>
         </tr>

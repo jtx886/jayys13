@@ -71,7 +71,7 @@ $sources = play_sources_all();
 
 <div class="dash-grid">
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-plus"></i>添加播放源</h3></div>
+    <div class="panel-head"><h3>添加播放源</h3></div>
     <div class="panel-body">
       <form method="post" action="<?= u('admin/sources.php') ?>">
         <?= csrf_field() ?>
@@ -88,13 +88,13 @@ $sources = play_sources_all();
         <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text-2);margin-bottom:16px;cursor:pointer">
           <input type="checkbox" name="is_default" style="accent-color:var(--primary);width:15px;height:15px"> 设为默认播放源
         </label>
-        <button class="btn btn-primary btn-block" type="submit"><i class="ic ic-plus"></i>添加播放源</button>
+        <button class="btn btn-primary btn-block" type="submit">添加播放源</button>
       </form>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-db"></i>播放源列表（<?= count($sources) ?>）</h3></div>
+    <div class="panel-head"><h3>播放源列表（<?= count($sources) ?>）</h3></div>
     <div class="tbl-wrap">
       <table class="tbl">
         <thead><tr><th>名称</th><th>接口地址</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
@@ -111,16 +111,16 @@ $sources = play_sources_all();
               <form method="post" action="<?= u('admin/sources.php') ?>" style="display:inline">
                 <?= csrf_field() ?>
                 <input type="hidden" name="act" value="set_default"><input type="hidden" name="sid" value="<?= (int)$s['id'] ?>">
-                <button class="btn btn-green btn-xs" type="submit"><i class="ic ic-check"></i>设为默认</button>
+                <button class="btn btn-green btn-xs" type="submit">设为默认</button>
               </form>
               <?php endif; ?>
               <button class="btn btn-ghost btn-xs" type="button" onclick='editSource(<?= json_encode([
                   'id' => (int)$s['id'], 'name' => $s['name'], 'url' => $s['api_url'], 'def' => (int)$s['is_default'],
-              ], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'><i class="ic ic-edit"></i>编辑</button>
+              ], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>编辑</button>
               <form method="post" action="<?= u('admin/sources.php') ?>" style="display:inline" data-confirm="确定删除播放源「<?= e($s['name']) ?>」吗？">
                 <?= csrf_field() ?>
                 <input type="hidden" name="act" value="del"><input type="hidden" name="sid" value="<?= (int)$s['id'] ?>">
-                <button class="btn btn-danger btn-xs" type="submit"><i class="ic ic-trash"></i>删除</button>
+                <button class="btn btn-danger btn-xs" type="submit">删除</button>
               </form>
             </td>
           </tr>
@@ -135,8 +135,8 @@ $sources = play_sources_all();
 <div class="overlay" id="edit-overlay">
   <div class="modal">
     <div class="modal-head">
-      <h3><i class="ic ic-edit"></i>编辑播放源</h3>
-      <button class="modal-close" type="button" data-close><i class="ic ic-close"></i></button>
+      <h3>编辑播放源</h3>
+      <button class="modal-close" type="button" data-close>关闭</button>
     </div>
     <form method="post" action="<?= u('admin/sources.php') ?>">
       <?= csrf_field() ?>
@@ -153,7 +153,7 @@ $sources = play_sources_all();
       <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text-2);margin-bottom:16px;cursor:pointer">
         <input type="checkbox" name="is_default" id="es-def" style="accent-color:var(--primary);width:15px;height:15px"> 设为默认播放源
       </label>
-      <button class="btn btn-primary btn-block" type="submit"><i class="ic ic-check"></i>保存修改</button>
+      <button class="btn btn-primary btn-block" type="submit">保存修改</button>
     </form>
   </div>
 </div>

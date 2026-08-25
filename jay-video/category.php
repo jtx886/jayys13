@@ -30,10 +30,10 @@ require_once __DIR__ . '/includes/header.php';
       <p class="ph-sub">共收录 <?= (int)($data['total_results'] ?? count($results)) ?> 部作品 · 数据来源 TMDB</p>
     </div>
     <div class="tabs" style="margin:0">
-      <a class="tab <?= $type === 'movie' ? 'active' : '' ?>" href="<?= u('category.php?type=movie') ?>"><i class="ic ic-film"></i>电影</a>
-      <a class="tab <?= $type === 'tv' ? 'active' : '' ?>" href="<?= u('category.php?type=tv') ?>"><i class="ic ic-tv"></i>剧集</a>
-      <a class="tab <?= $type === 'variety' ? 'active' : '' ?>" href="<?= u('category.php?type=variety') ?>"><i class="ic ic-mic"></i>综艺</a>
-      <a class="tab <?= $type === 'anime' ? 'active' : '' ?>" href="<?= u('category.php?type=anime') ?>"><i class="ic ic-star"></i>动漫</a>
+      <a class="tab <?= $type === 'movie' ? 'active' : '' ?>" href="<?= u('category.php?type=movie') ?>">电影</a>
+      <a class="tab <?= $type === 'tv' ? 'active' : '' ?>" href="<?= u('category.php?type=tv') ?>">剧集</a>
+      <a class="tab <?= $type === 'variety' ? 'active' : '' ?>" href="<?= u('category.php?type=variety') ?>">综艺</a>
+      <a class="tab <?= $type === 'anime' ? 'active' : '' ?>" href="<?= u('category.php?type=anime') ?>">动漫</a>
     </div>
   </div>
 
@@ -44,7 +44,6 @@ require_once __DIR__ . '/includes/header.php';
   <?= pagination_html($base, $page, max(1, $totalPages)) ?>
   <?php else: ?>
   <div class="empty">
-    <div class="empty-icon"><i class="ic ic-film"></i></div>
     <p>暂无数据，请稍后再试或检查后台 TMDB API Key 配置</p>
   </div>
   <?php endif; ?>

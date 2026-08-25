@@ -65,10 +65,10 @@ require_once __DIR__ . '/includes/header.php';
           <div style="flex:1;min-width:0">
             <div class="fb-item-meta">
               <span class="author"><?= name_html($f['username'] ? $f : null) ?></span>
-              <span><i class="ic ic-clock" style="width:12px;height:12px"></i> <?= e(time_ago($f['created_at'])) ?></span>
+              <span><?= e(time_ago($f['created_at'])) ?></span>
             </div>
           </div>
-          <?php if ($f['replies_count'] > 0): ?><span class="reply-count-pill"><i class="ic ic-chat" style="width:12px;height:12px"></i><?= (int)$f['replies_count'] ?> 条回复</span><?php endif; ?>
+          <?php if ($f['replies_count'] > 0): ?><span class="reply-count-pill"><?= (int)$f['replies_count'] ?> 条回复</span><?php endif; ?>
         </div>
         <a href="<?= u('feedback_view.php?id=' . (int)$f['id']) ?>">
           <h3 class="fb-item-title" style="margin-top:12px"><?= e($f['title']) ?></h3>
@@ -76,16 +76,15 @@ require_once __DIR__ . '/includes/header.php';
         </a>
         <div class="fb-actions">
           <button class="fb-act like-btn <?= $f['liked'] ? 'liked' : '' ?>" data-id="<?= (int)$f['id'] ?>">
-            <i class="ic ic-thumb <?= $f['liked'] ? 'on' : '' ?>"></i> 赞 <span><?= (int)$f['likes'] ?></span>
+            赞 <span><?= (int)$f['likes'] ?></span>
           </button>
-          <a class="fb-act" href="<?= u('feedback_view.php?id=' . (int)$f['id']) ?>"><i class="ic ic-chat"></i> 回复</a>
-          <a class="fb-act" href="<?= u('feedback_view.php?id=' . (int)$f['id']) ?>" style="margin-left:auto"><i class="ic ic-arrow-r"></i> 查看详情</a>
+          <a class="fb-act" href="<?= u('feedback_view.php?id=' . (int)$f['id']) ?>">回复</a>
+          <a class="fb-act" href="<?= u('feedback_view.php?id=' . (int)$f['id']) ?>" style="margin-left:auto">查看详情</a>
         </div>
       </div>
       <?php endforeach; else: ?>
       <div class="fb-card">
         <div class="empty" style="padding:40px 20px">
-          <div class="empty-icon"><i class="ic ic-chat"></i></div>
           <p>还没有公开反馈，来发布第一条吧！</p>
         </div>
       </div>
@@ -95,7 +94,7 @@ require_once __DIR__ . '/includes/header.php';
 
     <aside>
       <div class="sidebar-card">
-        <h3><i class="ic ic-edit"></i>发布反馈</h3>
+        <h3>发布反馈</h3>
         <?php if ($U): ?>
         <form method="post" action="<?= u('feedback.php') ?>">
           <?= csrf_field() ?>
@@ -107,28 +106,28 @@ require_once __DIR__ . '/includes/header.php';
             <label>详细内容</label>
             <textarea class="textarea" name="content" placeholder="请详细描述…（至少 5 个字）" required></textarea>
           </div>
-          <button class="btn btn-primary btn-block" type="submit"><i class="ic ic-send"></i>提交反馈</button>
+          <button class="btn btn-primary btn-block" type="submit">提交反馈</button>
         </form>
         <?php else: ?>
         <p style="color:var(--text-2);font-size:13px;margin-bottom:16px">登录后即可提交反馈、点赞与回复他人反馈。</p>
-        <a class="btn btn-primary btn-block" href="<?= u('login.php') ?>"><i class="ic ic-user"></i>去登录</a>
+        <a class="btn btn-primary btn-block" href="<?= u('login.php') ?>">去登录</a>
         <?php endif; ?>
       </div>
 
       <div class="sidebar-card">
-        <h3><i class="ic ic-fire"></i>社区动态</h3>
+        <h3>社区动态</h3>
         <div style="display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="color:var(--text-2);font-size:13px"><i class="ic ic-chat" style="width:14px;height:14px;color:var(--primary-2)"></i> 公开反馈</span>
+            <span style="color:var(--text-2);font-size:13px">公开反馈</span>
             <b><?= (int)$stats['total'] ?></b>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="color:var(--text-2);font-size:13px"><i class="ic ic-edit" style="width:14px;height:14px;color:var(--primary-2)"></i> 累计回复</span>
+            <span style="color:var(--text-2);font-size:13px">累计回复</span>
             <b><?= (int)$stats['replies'] ?></b>
           </div>
           <?php if ($U): ?>
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="color:var(--text-2);font-size:13px"><i class="ic ic-user" style="width:14px;height:14px;color:var(--primary-2)"></i> 我的反馈</span>
+            <span style="color:var(--text-2);font-size:13px">我的反馈</span>
             <b><?= (int)$stats['mine'] ?></b>
           </div>
           <?php endif; ?>
@@ -136,7 +135,7 @@ require_once __DIR__ . '/includes/header.php';
       </div>
 
       <div class="sidebar-card">
-        <h3><i class="ic ic-info"></i>反馈规范</h3>
+        <h3>反馈规范</h3>
         <p style="font-size:12.5px;color:var(--text-3);line-height:2">
           1. 反馈默认公开，所有人可见可回复<br>
           2. 管理员回复将优先展示<br>

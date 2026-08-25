@@ -43,8 +43,8 @@ require_once __DIR__ . '/includes/header.php';
 ?>
 <div class="container">
   <div class="crumb">
-    <a href="<?= u('index.php') ?>">首页</a><i class="ic ic-arrow-r"></i>
-    <a href="<?= u('feedback.php') ?>">反馈中心</a><i class="ic ic-arrow-r"></i>
+    <a href="<?= u('index.php') ?>">首页</a><span>/</span>
+    <a href="<?= u('feedback.php') ?>">反馈中心</a><span>/</span>
     <span style="color:var(--text-2)"><?= e(mb_substr($fb['title'], 0, 20)) ?></span>
   </div>
 
@@ -55,16 +55,16 @@ require_once __DIR__ . '/includes/header.php';
         <div class="fb-item-meta" style="font-size:14px">
           <span class="author"><?= name_html($fb['username'] ? $fb : null) ?></span>
         </div>
-        <div class="fb-item-meta" style="margin-top:3px"><i class="ic ic-clock" style="width:12px;height:12px"></i> <?= e($fb['created_at']) ?></div>
+        <div class="fb-item-meta" style="margin-top:3px"><?= e($fb['created_at']) ?></div>
       </div>
     </div>
     <h2 class="fb-item-title" style="font-size:19px;margin-top:16px"><?= e($fb['title']) ?></h2>
     <p class="fb-content" style="font-size:14.5px;line-height:1.9"><?= e($fb['content']) ?></p>
     <div class="fb-actions">
       <button class="fb-act like-btn <?= $fb['liked'] ? 'liked' : '' ?>" data-id="<?= (int)$fb['id'] ?>">
-        <i class="ic ic-thumb <?= $fb['liked'] ? 'on' : '' ?>"></i> 赞 <span><?= (int)$fb['likes'] ?></span>
+        赞 <span><?= (int)$fb['likes'] ?></span>
       </button>
-      <span class="fb-act" style="cursor:default"><i class="ic ic-chat"></i> <?= $replyCount ?> 条回复</span>
+      <span class="fb-act" style="cursor:default"><?= $replyCount ?> 条回复</span>
     </div>
 
     <?php if ($replies): ?>
@@ -95,20 +95,20 @@ require_once __DIR__ . '/includes/header.php';
       <div style="flex:1">
         <textarea class="textarea" name="content" placeholder="友善回复，理性讨论…" style="min-height:64px" required></textarea>
         <div style="text-align:right;margin-top:10px">
-          <button class="btn btn-primary btn-sm" type="submit"><i class="ic ic-send"></i>回复</button>
+          <button class="btn btn-primary btn-sm" type="submit">回复</button>
         </div>
       </div>
     </form>
     <?php else: ?>
     <div style="margin-top:18px;padding:16px;border:1px dashed var(--border-2);border-radius:12px;text-align:center">
-      <p style="color:var(--text-3);font-size:13px;margin-bottom:12px"><i class="ic ic-lock" style="width:14px;height:14px"></i> 登录后即可回复与点赞</p>
+      <p style="color:var(--text-3);font-size:13px;margin-bottom:12px">登录后即可回复与点赞</p>
       <a class="btn btn-primary btn-sm" href="<?= u('login.php') ?>">去登录</a>
     </div>
     <?php endif; ?>
   </div>
 
   <div style="margin-top:22px;text-align:center">
-    <a class="btn btn-ghost" href="<?= u('feedback.php') ?>"><i class="ic ic-arrow-l"></i>返回反馈列表</a>
+    <a class="btn btn-ghost" href="<?= u('feedback.php') ?>">返回反馈列表</a>
   </div>
 </div>
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
