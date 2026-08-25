@@ -90,6 +90,19 @@ if ($type === 'tv') {
         }
     }
     $curSeason = $season;
+
+    /* 本季简介为空时取英文简介兜底（TMDB 中文季简介经常缺失） */
+    if ($seasonData && empty($seasonData['overview'])) {
+        $enSeason = tmdb_get("/tv/{$id}/season/{$curSeason}", ['language' => 'en-US'], 3600);
+        if ($enSeason && !empty($enSeason['overview'])) $seasonData['overview'] = $enSeason['overview'];
+    }
+
+    /* 切换季时：海报与简介优先展示本季专属数据 */
+    if ($seasonData) {
+        $seasonPoster = tmdb_img($seasonData['poster_path'] ?? null, 'w500');
+        if ($seasonPoster !== '') $poster = $seasonPoster;
+        if (!empty($seasonData['overview'])) $overview = $seasonData['overview'];
+    }
 } else {
     $curSeason = 1;
 }

@@ -278,6 +278,8 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 .wrap{width:100%;max-width:560px;animation:up .5s ease}
 @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 .logo{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:28px}
+.logo-mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--primary),#ff4d3d);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(229,9,20,.35);flex:none}
+.logo-mark::before{content:"";width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:12px solid #fff;margin-left:3px}
 .logo h1{font-size:26px;font-weight:700}
 .logo span{color:var(--primary)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
@@ -312,6 +314,7 @@ background-image:radial-gradient(ellipse 60% 40% at 50% -10%,rgba(229,9,20,.15),
 <body>
 <div class="wrap">
   <div class="logo">
+    <div class="logo-mark"></div>
     <h1>Jay<span>影视</span></h1>
   </div>
 
