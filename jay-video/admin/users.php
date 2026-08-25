@@ -66,9 +66,9 @@ $base = u('admin/users.php') . ($kw !== '' ? '?kw=' . rawurlencode($kw) . '&' : 
   </div>
   <form method="get" action="<?= u('admin/users.php') ?>" class="filter-bar" style="margin:0">
     <div class="field" style="min-width:230px">
-      <label class="search-box"><i class="ic ic-search"></i><input type="text" name="kw" value="<?= e($kw) ?>" placeholder="搜索用户名 / 邮箱"></label>
+      <label class="search-box"><input type="text" name="kw" value="<?= e($kw) ?>" placeholder="搜索用户名 / 邮箱"></label>
     </div>
-    <button class="btn btn-primary btn-sm" type="submit"><i class="ic ic-search"></i>搜索</button>
+    <button class="btn btn-primary btn-sm" type="submit">搜索</button>
   </form>
 </div>
 
@@ -104,11 +104,11 @@ $base = u('admin/users.php') . ($kw !== '' ? '?kw=' . rawurlencode($kw) . '&' : 
               <form method="post" action="<?= u('admin/users.php') ?>" style="display:inline" data-confirm="确定解除该用户封禁吗？">
                 <?= csrf_field() ?>
                 <input type="hidden" name="act" value="unban"><input type="hidden" name="uid" value="<?= (int)$v['id'] ?>">
-                <button class="btn btn-green btn-xs" type="submit"><i class="ic ic-check"></i>解封</button>
+                <button class="btn btn-green btn-xs" type="submit">解封</button>
               </form>
-              <button class="btn btn-ghost btn-xs" type="button" onclick="openBan(<?= (int)$v['id'] ?>, '<?= e($v['username']) ?>', '<?= e($v['ban_reason']) ?>', '<?= e($v['ban_start']) ?>', '<?= e($v['ban_end']) ?>')"><i class="ic ic-edit"></i>修改</button>
+              <button class="btn btn-ghost btn-xs" type="button" onclick="openBan(<?= (int)$v['id'] ?>, '<?= e($v['username']) ?>', '<?= e($v['ban_reason']) ?>', '<?= e($v['ban_start']) ?>', '<?= e($v['ban_end']) ?>')">修改</button>
             <?php else: ?>
-              <button class="btn btn-danger btn-xs" type="button" onclick="openBan(<?= (int)$v['id'] ?>, '<?= e($v['username']) ?>', '', '', '')"><i class="ic ic-lock"></i>封禁</button>
+              <button class="btn btn-danger btn-xs" type="button" onclick="openBan(<?= (int)$v['id'] ?>, '<?= e($v['username']) ?>', '', '', '')">封禁</button>
             <?php endif; ?>
           </td>
         </tr>
@@ -125,8 +125,8 @@ $base = u('admin/users.php') . ($kw !== '' ? '?kw=' . rawurlencode($kw) . '&' : 
 <div class="overlay" id="ban-overlay">
   <div class="modal">
     <div class="modal-head">
-      <h3><i class="ic ic-lock"></i>封禁用户 <span id="ban-uname" style="color:var(--primary-2)"></span></h3>
-      <button class="modal-close" type="button" data-close><i class="ic ic-close"></i></button>
+      <h3>封禁用户 <span id="ban-uname" style="color:var(--primary-2)"></span></h3>
+      <button class="modal-close" type="button" data-close>关闭</button>
     </div>
     <form method="post" action="<?= u('admin/users.php') ?>">
       <?= csrf_field() ?>
@@ -144,8 +144,8 @@ $base = u('admin/users.php') . ($kw !== '' ? '?kw=' . rawurlencode($kw) . '&' : 
         <label>解除封禁时间（留空表示无限期）</label>
         <input class="input" type="datetime-local" name="end" id="ban-end">
       </div>
-      <p class="form-hint" style="margin-bottom:16px"><i class="ic ic-mail" style="width:13px;height:13px"></i> 封禁后将自动通过 163 SMTP 向该用户邮箱发送封禁通知</p>
-      <button class="btn btn-danger btn-block" type="submit"><i class="ic ic-lock"></i>确认封禁</button>
+      <p class="form-hint" style="margin-bottom:16px">封禁后将自动通过 163 SMTP 向该用户邮箱发送封禁通知</p>
+      <button class="btn btn-danger btn-block" type="submit">确认封禁</button>
     </form>
   </div>
 </div>

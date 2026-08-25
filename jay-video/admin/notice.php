@@ -41,7 +41,7 @@ $history = db_q("SELECT * FROM notices ORDER BY id DESC LIMIT 15");
 
 <div class="dash-grid">
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-plus"></i>发布新公告</h3></div>
+    <div class="panel-head"><h3>发布新公告</h3></div>
     <div class="panel-body">
       <form method="post" action="<?= u('admin/notice.php') ?>">
         <?= csrf_field() ?>
@@ -54,7 +54,7 @@ $history = db_q("SELECT * FROM notices ORDER BY id DESC LIMIT 15");
           <label>公告内容 <span class="req">*</span></label>
           <textarea class="textarea" name="content" style="min-height:150px" placeholder="输入公告正文…" required></textarea>
         </div>
-        <button class="btn btn-primary btn-block" type="submit"><i class="ic ic-bell"></i>发布公告</button>
+        <button class="btn btn-primary btn-block" type="submit">发布公告</button>
       </form>
     </div>
   </div>
@@ -62,12 +62,12 @@ $history = db_q("SELECT * FROM notices ORDER BY id DESC LIMIT 15");
   <div>
     <div class="panel">
       <div class="panel-head">
-        <h3><i class="ic ic-horn"></i>当前生效公告</h3>
+        <h3>当前生效公告</h3>
         <?php if ($active): ?>
         <form method="post" action="<?= u('admin/notice.php') ?>" data-confirm="确定下线当前公告吗？">
           <?= csrf_field() ?>
           <input type="hidden" name="act" value="revoke">
-          <button class="btn btn-danger btn-sm" type="submit"><i class="ic ic-close"></i>下线公告</button>
+          <button class="btn btn-danger btn-sm" type="submit">下线公告</button>
         </form>
         <?php endif; ?>
       </div>
@@ -75,10 +75,9 @@ $history = db_q("SELECT * FROM notices ORDER BY id DESC LIMIT 15");
         <?php if ($active): ?>
         <h4 style="font-size:16px;margin-bottom:12px"><?= e($active['title']) ?></h4>
         <div class="notice-preview"><?= e($active['content']) ?></div>
-        <p style="color:var(--text-3);font-size:12px;margin-top:10px"><i class="ic ic-clock" style="width:13px;height:13px"></i> 发布于 <?= e($active['created_at']) ?> · ID #<?= (int)$active['id'] ?></p>
+        <p style="color:var(--text-3);font-size:12px;margin-top:10px">发布于 <?= e($active['created_at']) ?> · ID #<?= (int)$active['id'] ?></p>
         <?php else: ?>
         <div class="empty" style="padding:26px">
-          <div class="empty-icon"><i class="ic ic-bell"></i></div>
           <p>暂无生效公告</p>
         </div>
         <?php endif; ?>
@@ -86,7 +85,7 @@ $history = db_q("SELECT * FROM notices ORDER BY id DESC LIMIT 15");
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3><i class="ic ic-clock"></i>历史公告</h3></div>
+      <div class="panel-head"><h3>历史公告</h3></div>
       <div class="tbl-wrap">
         <table class="tbl">
           <thead><tr><th>标题</th><th>状态</th><th>发布时间</th></tr></thead>

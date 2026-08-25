@@ -25,12 +25,7 @@
     }
     var t = document.createElement('div');
     t.className = 'toast ' + (type || 'info');
-    var ic = document.createElement('i');
-    ic.className = 'ic ' + (type === 'success' ? 'ic-check' : type === 'error' ? 'ic-info' : 'ic-horn');
-    t.appendChild(ic);
-    var sp = document.createElement('span');
-    sp.textContent = msg;
-    t.appendChild(sp);
+    t.textContent = msg;
     toastWrap.appendChild(t);
     setTimeout(function () {
       t.classList.add('out');
@@ -132,7 +127,7 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('请输入正确的邮箱地址', 'error'); return; }
     btn.disabled = true;
     var old = btn.textContent;
-    btn.innerHTML = '<i class="ic ic-spin"></i> 发送中';
+    btn.textContent = '发送中…';
     fetch('api.php?action=send_code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -166,8 +161,6 @@
         var cnt = btn.querySelector('span');
         if (cnt) cnt.textContent = d.count;
         btn.classList.toggle('liked', d.liked);
-        var ic = btn.querySelector('.ic');
-        if (ic && d.liked) { ic.classList.remove('on'); void ic.offsetWidth; ic.classList.add('on'); }
       } else { showToast(d.msg || '操作失败', 'error'); }
     }).catch(function () { showToast('网络异常', 'error'); });
   });
@@ -181,13 +174,12 @@
     var collapsed = box.querySelectorAll('.reply-item.reply-hidden');
     if (collapsed.length) {
       collapsed.forEach(function (r) { r.style.display = 'flex'; r.classList.add('shown'); r.classList.remove('reply-hidden'); });
-      var total = parseInt(tg.dataset.total || '0', 10);
-      tg.innerHTML = '<i class="ic ic-arrow-l" style="transform:rotate(90deg)"></i> 收起回复';
+      tg.textContent = '收起回复';
       tg.dataset.mode = 'open';
     } else {
       var items = box.querySelectorAll('.reply-item');
       items.forEach(function (r, i) { if (i >= 3) { r.style.display = 'none'; r.classList.add('reply-hidden'); r.classList.remove('shown'); } });
-      tg.innerHTML = '<i class="ic ic-arrow-l" style="transform:rotate(-90deg)"></i> 展开全部' + (tg.dataset.total || items.length) + '条回复';
+      tg.textContent = '展开全部' + (tg.dataset.total || items.length) + '条回复';
       tg.dataset.mode = 'closed';
     }
   });
@@ -197,7 +189,7 @@
       var tg = box.querySelector('.reply-toggle');
       if (items.length > 3 && tg) {
         items.forEach(function (r, i) { if (i >= 3) { r.style.display = 'none'; r.classList.add('reply-hidden'); } });
-        tg.innerHTML = '<i class="ic ic-arrow-l" style="transform:rotate(-90deg)"></i> 展开全部' + (tg.dataset.total || items.length) + '条回复';
+        tg.textContent = '展开全部' + (tg.dataset.total || items.length) + '条回复';
         tg.dataset.mode = 'closed';
         tg.style.display = 'flex';
       } else if (tg) { tg.style.display = 'none'; }

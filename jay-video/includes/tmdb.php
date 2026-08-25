@@ -163,14 +163,14 @@ function media_card_html(array $m, int $i = 0): string
     $title = $m['title'] ?: ($m['orig'] ?: '未知影片');
     $href = u('detail.php?type=' . $m['type'] . '&id=' . $m['id']);
     $remark = $m['year'] ?: (($m['type'] === 'tv') ? '剧集' : '电影');
-    $score = $m['score'] > 0 ? '<span class="poster-score"><i class="ic ic-star"></i>' . $m['score'] . '</span>' : '';
+    $score = $m['score'] > 0 ? '<span class="poster-score">评分 ' . $m['score'] . '</span>' : '';
     $ani = 'style="animation-delay:' . min($i * 40, 400) . 'ms"';
     return '<a class="media-card" href="' . e($href) . '" ' . $ani . '>
         <div class="poster">
             <img class="poster-img" data-fade src="' . e($m['poster']) . '" alt="' . e($title) . '" loading="lazy">
             <span class="poster-remark">' . e($remark) . '</span>
             ' . $score . '
-            <span class="poster-play"><i class="ic ic-play"></i></span>
+            <span class="poster-play">播放</span>
         </div>
         <h4>' . e($title) . '</h4>
         <div class="sub">' . e($m['year'] ? $m['year'] : '') . '</div>

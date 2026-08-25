@@ -2,7 +2,6 @@
 <footer class="footer">
   <div class="container footer-inner">
     <a class="logo" href="<?= u('index.php') ?>" style="font-size:16px">
-      <span class="logo-mark" style="width:26px;height:26px;border-radius:8px"><i class="ic ic-play" style="width:12px;height:12px"></i></span>
       <span class="logo-text"><?= e(site_name()) ?></span>
     </a>
     <div class="f-links">

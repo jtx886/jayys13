@@ -238,7 +238,7 @@ function pagination_html(string $base, int $page, int $totalPages): string
 {
     if ($totalPages <= 1) return '';
     $html = '<div class="pagination">';
-    $html .= '<a class="page-btn" ' . ($page <= 1 ? 'disabled' : 'href="' . e($base . 'page=' . ($page - 1)) . '"') . '><i class="ic ic-arrow-l"></i></a>';
+    $html .= '<a class="page-btn" ' . ($page <= 1 ? 'disabled' : 'href="' . e($base . 'page=' . ($page - 1)) . '"') . '>上一页</a>';
     $from = max(1, $page - 2);
     $to = min($totalPages, $page + 2);
     if ($from > 1) {
@@ -252,7 +252,7 @@ function pagination_html(string $base, int $page, int $totalPages): string
         if ($to < $totalPages - 1) $html .= '<span class="page-btn" disabled>…</span>';
         $html .= '<a class="page-btn" href="' . e($base . 'page=' . $totalPages) . '">' . $totalPages . '</a>';
     }
-    $html .= '<a class="page-btn" ' . ($page >= $totalPages ? 'disabled' : 'href="' . e($base . 'page=' . ($page + 1)) . '"') . '><i class="ic ic-arrow-r"></i></a>';
+    $html .= '<a class="page-btn" ' . ($page >= $totalPages ? 'disabled' : 'href="' . e($base . 'page=' . ($page + 1)) . '"') . '>下一页</a>';
     $html .= '</div>';
     return $html;
 }

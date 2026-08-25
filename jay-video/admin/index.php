@@ -38,19 +38,19 @@ $favs = db_q(
     <h1>仪表盘</h1>
     <p class="at-sub">欢迎回来，<?= e($ADMIN['username']) ?> · 今天是 <?= date('Y年m月d日') ?></p>
   </div>
-  <a class="btn btn-ghost" href="<?= u('index.php') ?>"><i class="ic ic-home"></i>查看前台</a>
+  <a class="btn btn-ghost" href="<?= u('index.php') ?>">查看前台</a>
 </div>
 
 <div class="stat-grid">
-  <div class="stat-card"><div class="stat-icon"><i class="ic ic-user"></i></div><div><b><?= $statUsers ?></b><span>注册用户（今日 +<?= $statToday ?>）</span></div></div>
-  <div class="stat-card"><div class="stat-icon"><i class="ic ic-chat"></i></div><div><b><?= $statFb ?></b><span>用户反馈（回复 <?= $statReply ?>）</span></div></div>
-  <div class="stat-card"><div class="stat-icon"><i class="ic ic-heart"></i></div><div><b><?= $statFav ?></b><span>收藏总数</span></div></div>
-  <div class="stat-card"><div class="stat-icon"><i class="ic ic-clock"></i></div><div><b><?= $statHist ?></b><span>观看历史记录</span></div></div>
+  <div class="stat-card"><div><b><?= $statUsers ?></b><span>注册用户（今日 +<?= $statToday ?>）</span></div></div>
+  <div class="stat-card"><div><b><?= $statFb ?></b><span>用户反馈（回复 <?= $statReply ?>）</span></div></div>
+  <div class="stat-card"><div><b><?= $statFav ?></b><span>收藏总数</span></div></div>
+  <div class="stat-card"><div><b><?= $statHist ?></b><span>观看历史记录</span></div></div>
 </div>
 
 <div class="dash-grid">
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-user"></i>最新注册用户</h3><a class="btn btn-ghost btn-xs" href="<?= u('admin/users.php') ?>">全部用户</a></div>
+    <div class="panel-head"><h3>最新注册用户</h3><a class="btn btn-ghost btn-xs" href="<?= u('admin/users.php') ?>">全部用户</a></div>
     <div class="tbl-wrap">
       <table class="tbl">
         <thead><tr><th>用户</th><th>邮箱</th><th>状态</th><th>注册时间</th></tr></thead>
@@ -71,7 +71,7 @@ $favs = db_q(
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-chat"></i>最新反馈</h3><a class="btn btn-ghost btn-xs" href="<?= u('admin/feedback.php') ?>">反馈管理</a></div>
+    <div class="panel-head"><h3>最新反馈</h3><a class="btn btn-ghost btn-xs" href="<?= u('admin/feedback.php') ?>">反馈管理</a></div>
     <div class="tbl-wrap">
       <table class="tbl">
         <thead><tr><th>反馈</th><th>用户</th><th>回复</th><th>时间</th></tr></thead>
@@ -93,7 +93,7 @@ $favs = db_q(
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h3><i class="ic ic-clock"></i>观看历史</h3>
+  <div class="panel-head"><h3>观看历史</h3>
     <form method="get" action="<?= u('admin/index.php') ?>" class="filter-bar" style="margin:0">
       <div class="field" style="min-width:170px">
         <select class="select" name="hist_user" onchange="this.form.submit()">
@@ -127,7 +127,7 @@ $favs = db_q(
 </div>
 
 <div class="panel">
-  <div class="panel-head"><h3><i class="ic ic-heart"></i>用户收藏</h3>
+  <div class="panel-head"><h3>用户收藏</h3>
     <form method="get" action="<?= u('admin/index.php') ?>" class="filter-bar" style="margin:0">
       <div class="field" style="min-width:170px">
         <select class="select" name="fav_user" onchange="this.form.submit()">

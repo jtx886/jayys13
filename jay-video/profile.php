@@ -80,7 +80,7 @@ $U = current_user();
     <?= avatar_html($U, 'avatar-lg') ?>
     <div class="profile-info">
       <h2><?= e($U['username']) ?><?= $U['role'] === 'admin' ? ' <span class="badge-dev">开发者</span>' : '' ?></h2>
-      <p class="p-mail"><i class="ic ic-mail" style="width:13px;height:13px"></i> <?= e($U['email']) ?> · 注册于 <?= e(mb_substr($U['created_at'], 0, 10)) ?></p>
+      <p class="p-mail"><?= e($U['email']) ?> · 注册于 <?= e(mb_substr($U['created_at'], 0, 10)) ?></p>
       <div class="profile-stats">
         <div class="pstat"><b><?= $favCount ?></b><span>收藏</span></div>
         <div class="pstat"><b><?= $histCount ?></b><span>观看记录</span></div>
@@ -88,38 +88,38 @@ $U = current_user();
       </div>
     </div>
     <?php if ($U['role'] === 'admin'): ?>
-    <a class="btn btn-ghost" href="<?= u('admin/index.php') ?>"><i class="ic ic-db"></i>进入管理后台</a>
+    <a class="btn btn-ghost" href="<?= u('admin/index.php') ?>">进入管理后台</a>
     <?php endif; ?>
   </div>
 
   <div class="tabs">
-    <a class="tab <?= $tab === 'account' ? 'active' : '' ?>" href="<?= u('profile.php?tab=account') ?>"><i class="ic ic-user"></i>账号设置</a>
-    <a class="tab <?= $tab === 'fav' ? 'active' : '' ?>" href="<?= u('profile.php?tab=fav') ?>"><i class="ic ic-heart"></i>我的收藏</a>
-    <a class="tab <?= $tab === 'history' ? 'active' : '' ?>" href="<?= u('profile.php?tab=history') ?>"><i class="ic ic-clock"></i>观看历史</a>
+    <a class="tab <?= $tab === 'account' ? 'active' : '' ?>" href="<?= u('profile.php?tab=account') ?>">账号设置</a>
+    <a class="tab <?= $tab === 'fav' ? 'active' : '' ?>" href="<?= u('profile.php?tab=fav') ?>">我的收藏</a>
+    <a class="tab <?= $tab === 'history' ? 'active' : '' ?>" href="<?= u('profile.php?tab=history') ?>">观看历史</a>
   </div>
 
   <?php if ($tab === 'account'): ?>
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-user"></i>头像设置</h3></div>
+    <div class="panel-head"><h3>头像设置</h3></div>
     <div class="panel-body">
       <form method="post" action="<?= u('profile.php?tab=account') ?>" enctype="multipart/form-data" class="avatar-upload" id="avatar-form">
         <?= csrf_field() ?>
         <input type="hidden" name="act" value="avatar">
         <div class="avatar-preview">
           <?= avatar_html($U, 'avatar-xl') ?>
-          <label class="avatar-mask" for="avatar-file"><i class="ic ic-edit" style="width:20px;height:20px"></i></label>
+          <label class="avatar-mask" for="avatar-file">更换头像</label>
         </div>
         <div style="flex:1;min-width:220px">
           <p style="color:var(--text-2);font-size:13.5px;margin-bottom:12px">支持 JPG / PNG / GIF / WEBP，大小不超过 2MB</p>
           <input type="file" id="avatar-file" class="file-hidden" name="avatar" accept="image/*" onchange="document.getElementById('avatar-form').submit()">
-          <button class="btn btn-primary" type="button" onclick="document.getElementById('avatar-file').click()"><i class="ic ic-edit"></i>选择图片上传</button>
+          <button class="btn btn-primary" type="button" onclick="document.getElementById('avatar-file').click()">选择图片上传</button>
         </div>
       </form>
     </div>
   </div>
 
   <div class="panel">
-    <div class="panel-head"><h3><i class="ic ic-info"></i>账号信息</h3></div>
+    <div class="panel-head"><h3>账号信息</h3></div>
     <div class="panel-body">
       <div class="mini-form-row">
         <div class="field"><label>用户名</label><input class="input" type="text" value="<?= e($U['username']) ?>" disabled></div>
@@ -133,7 +133,7 @@ $U = current_user();
   <?php elseif ($tab === 'fav'): ?>
   <div class="panel">
     <div class="panel-head">
-      <h3><i class="ic ic-heart"></i>我的收藏（<?= $favCount ?>）</h3>
+      <h3>我的收藏（<?= $favCount ?>）</h3>
     </div>
     <div class="panel-body">
       <?php if ($favs): ?>
@@ -144,7 +144,7 @@ $U = current_user();
             <div class="poster">
               <img class="poster-img" data-fade src="<?= e($f['poster']) ?>" alt="<?= e($f['title']) ?>" loading="lazy">
               <span class="poster-remark"><?= $f['media_type'] === 'tv' ? '剧集' : '电影' ?></span>
-              <span class="poster-play"><i class="ic ic-play"></i></span>
+              <span class="poster-play">播放</span>
             </div>
             <h4><?= e($f['title']) ?></h4>
             <div class="sub">收藏于 <?= e(mb_substr($f['created_at'], 0, 10)) ?></div>
@@ -153,16 +153,15 @@ $U = current_user();
             <?= csrf_field() ?>
             <input type="hidden" name="act" value="remove_fav">
             <input type="hidden" name="fid" value="<?= (int)$f['id'] ?>">
-            <button class="btn btn-ghost btn-xs btn-block" type="submit"><i class="ic ic-trash"></i>取消收藏</button>
+            <button class="btn btn-ghost btn-xs btn-block" type="submit">取消收藏</button>
           </form>
         </div>
         <?php endforeach; ?>
       </div>
       <?php else: ?>
       <div class="empty">
-        <div class="empty-icon"><i class="ic ic-heart"></i></div>
         <p>还没有收藏，去发现好片吧</p>
-        <a class="btn btn-primary" href="<?= u('index.php') ?>"><i class="ic ic-fire"></i>去逛逛</a>
+        <a class="btn btn-primary" href="<?= u('index.php') ?>">去逛逛</a>
       </div>
       <?php endif; ?>
     </div>
@@ -171,12 +170,12 @@ $U = current_user();
   <?php else: ?>
   <div class="panel">
     <div class="panel-head">
-      <h3><i class="ic ic-clock"></i>观看历史（<?= $histCount ?>）</h3>
+      <h3>观看历史（<?= $histCount ?>）</h3>
       <?php if ($hists): ?>
       <form method="post" action="<?= u('profile.php?tab=history') ?>" data-confirm="确定清空全部观看记录吗？该操作不可恢复！">
         <?= csrf_field() ?>
         <input type="hidden" name="act" value="clear_history">
-        <button class="btn btn-danger btn-sm" type="submit"><i class="ic ic-trash"></i>清空全部</button>
+        <button class="btn btn-danger btn-sm" type="submit">清空全部</button>
       </form>
       <?php endif; ?>
     </div>
@@ -191,19 +190,19 @@ $U = current_user();
             <div class="h-sub">
               <span><?= $h['media_type'] === 'tv' ? '第 ' . (int)$h['season'] . ' 季 · 第 ' . (int)$h['episode'] . ' 集' : '正片' ?></span>
               <?php if ($h['episode_name']): ?><span><?= e($h['episode_name']) ?></span><?php endif; ?>
-              <span class="prog"><i class="ic ic-eye"></i>已观看 <?= e(format_seconds((int)$h['position_seconds'])) ?></span>
+              <span class="prog">已观看 <?= e(format_seconds((int)$h['position_seconds'])) ?></span>
               <span><?= e(time_ago($h['updated_at'])) ?></span>
             </div>
           </div>
           <div class="hist-acts">
             <a class="btn btn-primary btn-sm" href="<?= u('play.php?type=' . e($h['media_type']) . '&id=' . (int)$h['tmdb_id'] . '&season=' . (int)$h['season'] . '&episode=' . (int)$h['episode']) ?>">
-              <i class="ic ic-play"></i>继续观看
+              继续观看
             </a>
             <form method="post" action="<?= u('profile.php?tab=history') ?>" data-confirm="确定删除这条记录吗？">
               <?= csrf_field() ?>
               <input type="hidden" name="act" value="del_history">
               <input type="hidden" name="hid" value="<?= (int)$h['id'] ?>">
-              <button class="btn btn-ghost btn-xs" type="submit"><i class="ic ic-trash"></i>删除</button>
+              <button class="btn btn-ghost btn-xs" type="submit">删除</button>
             </form>
           </div>
         </div>
@@ -211,9 +210,8 @@ $U = current_user();
       </div>
       <?php else: ?>
       <div class="empty">
-        <div class="empty-icon"><i class="ic ic-clock"></i></div>
         <p>暂无观看记录，看过的影片会自动记录在这里</p>
-        <a class="btn btn-primary" href="<?= u('index.php') ?>"><i class="ic ic-fire"></i>开始观影</a>
+        <a class="btn btn-primary" href="<?= u('index.php') ?>">开始观影</a>
       </div>
       <?php endif; ?>
     </div>

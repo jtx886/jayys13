@@ -30,17 +30,15 @@ require_once __DIR__ . '/includes/header.php';
     </div>
     <form action="<?= u('search.php') ?>" method="get" style="min-width:300px">
       <label class="search-box" style="padding:4px 8px">
-        <i class="ic ic-search"></i>
-        <input type="text" name="wd" value="<?= e($wd) ?>" placeholder="搜索片名，回车确认">
+                <input type="text" name="wd" value="<?= e($wd) ?>" placeholder="搜索片名，回车确认">
       </label>
     </form>
   </div>
 
   <?php if ($wd !== '' && !$results): ?>
   <div class="empty">
-    <div class="empty-icon"><i class="ic ic-search"></i></div>
     <p>未找到与「<?= e($wd) ?>」相关的影视内容</p>
-    <a class="btn btn-ghost" href="<?= u('index.php') ?>"><i class="ic ic-home"></i>回到首页</a>
+    <a class="btn btn-ghost" href="<?= u('index.php') ?>">回到首页</a>
   </div>
   <?php elseif ($results): ?>
   <div class="media-grid">
@@ -49,7 +47,6 @@ require_once __DIR__ . '/includes/header.php';
   <?= pagination_html($base, $page, max(1, $totalPages)) ?>
   <?php else: ?>
   <div class="empty">
-    <div class="empty-icon"><i class="ic ic-search"></i></div>
     <p>输入片名开始探索吧，支持电影、剧集、综艺、动漫</p>
   </div>
   <?php endif; ?>
