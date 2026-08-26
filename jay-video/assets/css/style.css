@@ -108,10 +108,14 @@ input,select,textarea{font-family:inherit;font-size:14px;color:var(--text)}
 .navbar-inner{height:var(--nav-h);display:flex;align-items:center;gap:26px}
 .logo{display:flex;align-items:center;gap:9px;font-size:21px;font-weight:800;flex:none}
 .logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-2));
-  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px var(--primary-30);transition:transform var(--transition);flex:none}
+  display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 14px var(--primary-30);transition:transform var(--transition)}
 .logo:hover .logo-mark{transform:rotate(-8deg) scale(1.06)}
-.logo-play{display:block;width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:11px solid #fff;margin-left:3px}
 .logo-text{background:linear-gradient(120deg,#fff 20%,var(--primary-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+
+/* ============ 纯CSS图标（仅用于logo播放标识） ============ */
+.ic{position:relative;display:inline-block;width:18px;height:18px;vertical-align:-3.5px;flex:none}
+.ic-play::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-34%,-50%);
+  border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:10px solid currentColor}
 .nav-menu{display:flex;align-items:center;gap:4px;flex:1}
 .nav-link{position:relative;padding:8px 14px;font-size:14.5px;color:var(--text-2);border-radius:8px;transition:all var(--transition);display:flex;align-items:center;gap:6px}
 .nav-link:hover{color:#fff;background:rgba(255,255,255,.06)}

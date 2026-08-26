@@ -32,7 +32,7 @@ $PAGE_TITLE = ($curMenu ? $curMenu[2] . ' - ' : '') . '管理后台 - ' . site_n
 <header class="navbar">
   <div class="container navbar-inner">
     <a class="logo" href="<?= u('admin/index.php') ?>">
-      <span class="logo-mark"><i class="logo-play"></i></span>
+      <span class="logo-mark"><i class="ic ic-play" style="width:16px;height:16px"></i></span>
       <span class="logo-text"><?= e(site_name()) ?></span>
       <span class="tag" style="font-size:11px;margin-left:4px">管理后台</span>
     </a>
