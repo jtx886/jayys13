@@ -30,15 +30,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -57,9 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -70,7 +64,6 @@ import coil.compose.AsyncImage
 import com.jay.video.App
 import com.jay.video.data.DirectPlay
 import com.jay.video.data.DirectPlayData
-import com.jay.video.data.SearchCard
 import com.jay.video.data.source.PlayLine
 import com.jay.video.data.source.VodItem
 import com.jay.video.ui.components.EmptyBox
@@ -88,81 +81,26 @@ import kotlinx.coroutines.launch
 
 class SearchViewModel : ViewModel() {
     data class UiState(
-        // TMDB 影视库
         val keyword: String = "",
         val searching: Boolean = false,
         val searched: Boolean = false,
-        val results: List<SearchCard> = emptyList(),
-        val total: Int = 0,
-        val page: Int = 1,
-        val totalPages: Int = 1,
-        val loadingMore: Boolean = false,
-        // 资源站聚合
-        val srcKeyword: String = "",
-        val srcSearching: Boolean = false,
-        val srcSearched: Boolean = false,
-        val srcResults: List<Pair<String, List<VodItem>>> = emptyList(), // siteName to items
+        val results: List<Pair<String, List<VodItem>>> = emptyList(), // siteName to items
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
-    fun tmdbSearch(wd: String) {
-        val kw = wd.trim()
-        if (kw.isEmpty()) return
-        _state.value = UiState(keyword = kw, searching = true)
-        viewModelScope.launch {
-            try {
-                val (cards, totalPages) = App.tmdb.searchCards(kw, 1)
-                _state.value = UiState(
-                    keyword = kw,
-                    searched = true,
-                    results = cards,
-                    total = cards.size,
-                    page = 1,
-                    totalPages = totalPages,
-                )
-            } catch (e: Exception) {
-                _state.value = UiState(keyword = kw, searched = true)
-            }
-        }
-    }
-
-    fun loadMore() {
-        val s = _state.value
-        if (s.searching || s.loadingMore || s.page >= s.totalPages || s.keyword.isEmpty()) return
-        _state.value = s.copy(loadingMore = true)
-        viewModelScope.launch {
-            try {
-                val (cards, totalPages) = App.tmdb.searchCards(s.keyword, s.page + 1)
-                _state.value = _state.value.copy(
-                    loadingMore = false,
-                    results = _state.value.results + cards,
-                    page = s.page + 1,
-                    totalPages = totalPages,
-                )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(loadingMore = false)
-            }
-        }
-    }
-
     /** 资源站聚合搜索（结果增量更新） */
-    fun sourceSearch(wd: String) {
+    fun search(wd: String) {
         val kw = wd.trim()
         if (kw.isEmpty()) return
-        _state.value = _state.value.copy(
-            srcKeyword = kw,
-            srcSearching = true,
-            srcSearched = true,
-            srcResults = emptyList(),
-        )
+        _state.value = UiState(keyword = kw, searching = true, searched = true)
         viewModelScope.launch {
             App.source.searchAll(kw) { site, results ->
                 val cur = _state.value
-                _state.value = cur.copy(srcResults = cur.srcResults + (site.name to results))
+                _state.value = cur.copy(results = cur.results + (site.name to results))
             }
-            _state.value = _state.value.copy(srcSearching = false)
+            _state.value = _state.value.copy(searching = false)
         }
     }
 }
@@ -171,13 +109,11 @@ class SearchViewModel : ViewModel() {
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
-    onOpenDetail: (String, Int, Int) -> Unit,
     onDirectPlay: () -> Unit,
     vm: SearchViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
-    var tab by remember { mutableIntStateOf(0) }
     var sheetItem by remember { mutableStateOf<VodItem?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -203,9 +139,7 @@ fun SearchScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(
-                        onSearch = {
-                            if (tab == 0) vm.tmdbSearch(input) else vm.sourceSearch(input)
-                        },
+                        onSearch = { vm.search(input) },
                     ),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Panel,
@@ -223,45 +157,40 @@ fun SearchScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Bg),
         )
 
-        // Tab
-        TabRow(
-            selectedTabIndex = tab,
-            containerColor = Bg,
-            contentColor = Primary,
-            indicator = { positions ->
-                TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(positions[tab]),
-                    color = Primary,
-                )
-            },
-            divider = {},
-        ) {
-            listOf("影视库", "资源站").forEachIndexed { i, label ->
-                Tab(
-                    selected = tab == i,
-                    onClick = {
-                        tab = i
-                        if (input.isNotBlank()) {
-                            if (i == 0 && !state.searched) vm.tmdbSearch(input)
-                            if (i == 1 && !state.srcSearched) vm.sourceSearch(input)
-                        }
-                    },
-                ) {
+        // 结果
+        when {
+            !state.searched -> EmptyBox("输入片名，聚合搜索全部播放源")
+            state.searching && state.results.isEmpty() -> LoadingBox(Modifier.fillMaxSize())
+            state.results.all { it.second.isEmpty() } && !state.searching -> EmptyBox("所有源均未找到该片")
+            else -> {
+                val flat = state.results.flatMap { it.second }
+                Column(Modifier.fillMaxSize()) {
                     Text(
-                        label,
-                        color = if (tab == i) Primary else Text2,
-                        fontSize = 14.sp,
-                        fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.padding(vertical = 12.dp),
+                        buildString {
+                            append("「${state.keyword}」")
+                            append(state.results.count { it.second.isNotEmpty() })
+                            append("个源 / ")
+                            append(flat.size)
+                            append("条结果")
+                            if (state.searching) append(" · 搜索中…")
+                        },
+                        color = Text2,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        items(flat, key = { it.siteKey + it.id + it.name }) { vod ->
+                            VodCardItem(vod) { sheetItem = vod }
+                        }
+                    }
                 }
             }
-        }
-
-        // 内容
-        when (tab) {
-            0 -> TmdbTab(state, onOpenDetail) { vm.loadMore() }
-            1 -> SourceTab(state) { sheetItem = it }
         }
     }
 
@@ -283,176 +212,6 @@ fun SearchScreen(
                 onDirectPlay()
             },
         )
-    }
-}
-
-/* ---------- Tab 1：TMDB 影视库（分季卡片） ---------- */
-
-@Composable
-private fun TmdbTab(
-    state: SearchViewModel.UiState,
-    onOpenDetail: (String, Int, Int) -> Unit,
-    onLoadMore: () -> Unit,
-) {
-    when {
-        state.searching -> LoadingBox(Modifier.fillMaxSize())
-        !state.searched -> EmptyBox("输入片名开始探索吧")
-        state.results.isEmpty() -> EmptyBox("未找到相关影视内容")
-        else -> {
-            Text(
-                "关键词「${state.keyword}」找到 ${state.total} 个结果",
-                color = Text2,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                items(state.results, key = { it.media.type + it.media.id + "-s" + it.season }) { c ->
-                    SearchCardItem(c) { onOpenDetail(c.media.type, c.media.id, c.season) }
-                }
-                if (state.page < state.totalPages) {
-                    item("more") {
-                        Text(
-                            if (state.loadingMore) "加载中…" else "点击加载更多",
-                            color = Primary,
-                            fontSize = 13.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onLoadMore() }
-                                .padding(vertical = 16.dp),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** 搜索卡片（含分季标识） */
-@Composable
-private fun SearchCardItem(c: SearchCard, onClick: () -> Unit) {
-    Column(modifier = Modifier.clickable { onClick() }) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Panel),
-        ) {
-            AsyncImage(
-                model = c.displayPoster,
-                contentDescription = c.displayTitle,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            // 季标识角标
-            if (c.season > 0) {
-                Text(
-                    c.seasonName,
-                    color = Color.White,
-                    fontSize = 9.5.sp,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Primary.copy(alpha = 0.9f))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                )
-            }
-            // 年份
-            if (c.displayYear.isNotEmpty()) {
-                Text(
-                    c.displayYear,
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0x66000000))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                )
-            }
-            // 评分
-            if (c.media.score > 0) {
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .background(Color(0xB3000000))
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC53D), modifier = Modifier.size(10.dp))
-                    Text(
-                        c.media.score.toString(),
-                        color = Color(0xFFFFC53D),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(start = 2.dp),
-                    )
-                }
-            }
-        }
-        Text(
-            c.displayTitle,
-            color = Text1,
-            fontSize = 12.5.sp,
-            lineHeight = 17.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-    }
-}
-
-/* ---------- Tab 2：资源站聚合搜索 ---------- */
-
-@Composable
-private fun SourceTab(
-    state: SearchViewModel.UiState,
-    onItemClick: (VodItem) -> Unit,
-) {
-    when {
-        !state.srcSearched -> EmptyBox("输入片名，聚合搜索全部播放源")
-        state.srcSearching && state.srcResults.isEmpty() -> LoadingBox(Modifier.fillMaxSize())
-        state.srcResults.all { it.second.isEmpty() } && !state.srcSearching -> EmptyBox("所有源均未找到该片")
-        else -> {
-            val flat = state.srcResults.flatMap { it.second }
-            Column(Modifier.fillMaxSize()) {
-                Text(
-                    buildString {
-                        append("「${state.srcKeyword}」")
-                        append(state.srcResults.count { it.second.isNotEmpty() })
-                        append("个源 / ")
-                        append(flat.size)
-                        append("条结果")
-                        if (state.srcSearching) append(" · 搜索中…")
-                    },
-                    color = Text2,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    items(flat, key = { it.siteKey + it.id + it.name }) { vod ->
-                        VodCardItem(vod) { onItemClick(vod) }
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -12,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
@@ -41,11 +42,11 @@ data class PlayLine(
 
 /**
  * 多站点资源仓库（影视仓/TVBox 兼容）
- * - 用户配置 URL → 解析 sites → 与内置源合并
+ * - 用户配置 URL → 解析 sites（仅用户配置，不混入内置源）
+ * - type 3: spider 爬虫源（DexClassLoader 加载 jar，TVBox 协议）
  * - type 1: 苹果CMS json 接口
  * - type 0: 苹果CMS xml 接口
- * - type 3: 爬虫源（需jar），降级尝试 json 接口
- * - 聚合搜索 / 按站点解析 / 多季匹配（移植自 PHP 版）
+ * - 聚合搜索 / 按站点解析 / 多季匹配
  */
 class SiteRepo(
     private val http: OkHttpClient,
@@ -54,12 +55,6 @@ class SiteRepo(
     companion object {
         private const val UA = "Mozilla/5.0 (Linux; Android 14) JayVideo/1.0"
         private const val TTL = 30 * 60 * 1000L
-
-        /** 内置源（无配置时兜底） */
-        fun builtinSites(): List<Site> = listOf(
-            Site("builtin_lz", "量子资源", 1, "https://cj.lziapi.com/api.php/provide/vod", builtin = true),
-            Site("builtin_ff", "非凡影视", 1, "https://api.yyzy-tv.vip/inc/apijson.php", builtin = true),
-        )
 
         private val cache = HashMap<String, Pair<Long, Any>>()
 
@@ -74,32 +69,36 @@ class SiteRepo(
         }
     }
 
-    private val _sites = MutableStateFlow(builtinSites())
+    private val _sites = MutableStateFlow<List<Site>>(emptyList())
     val sites: StateFlow<List<Site>> = _sites
 
     private val _configs = MutableStateFlow<List<String>>(emptyList())
     val configs: StateFlow<List<String>> = _configs
 
-    private var lastLoadOk: Boolean = false
     val loadMessage = MutableStateFlow("")
 
-    /** 全部站点（内置 + 配置） */
+    /** 全部站点（仅来自用户配置） */
     fun allSites(): List<Site> = _sites.value
 
     /** 已启用站点（未被用户停用且可搜索） */
     fun enabledSites(): List<Site> =
         allSites().filter { it.key !in Prefs.disabledKeys() && it.searchable }
 
-    /** 重新加载用户配置（拉取所有配置URL并合并站点） */
+    /** 按 key 查站点 */
+    fun siteOf(key: String): Site? = allSites().firstOrNull { it.key == key }
+
+    /** 是否 spider 站点 */
+    fun isSpiderSite(site: Site?): Boolean = site != null && site.type == 3 && site.jarUrl.isNotEmpty()
+
+    /** 重新加载用户配置（拉取所有配置URL并合并站点，主用配置优先） */
     suspend fun refreshConfigs() {
         val urls = Prefs.configUrls()
         _configs.value = urls
 
         if (urls.isEmpty()) {
-            _sites.value = builtinSites()
+            _sites.value = emptyList()
             Prefs.saveSitesCache(emptyList())
-            lastLoadOk = true
-            loadMessage.value = "未添加配置，使用内置源"
+            loadMessage.value = "未添加配置，请在「我的」页面添加"
             return
         }
 
@@ -108,34 +107,41 @@ class SiteRepo(
         }
 
         val merged = LinkedHashMap<String, Site>()
-        // 配置站点优先（同 key 覆盖）
-        for ((i, cfg) in configs.withIndex()) {
+        // 主用配置在前（同 key 优先保留主用）
+        for (cfg in configs) {
             for (s in cfg.sites) {
+                if (merged.containsKey(s.key)) continue
                 merged[s.key] = s
             }
-            if (cfg.sites.isEmpty()) {
-                loadMessage.value = "配置 ${i + 1} 未解析到站点"
-            }
-        }
-        // 内置源补充（key 不冲突时）
-        for (b in builtinSites()) {
-            if (merged.none { it.value.api == b.api }) merged[b.key] = b
         }
 
         val list = merged.values.toList()
-        lastLoadOk = list.isNotEmpty()
+
         if (list.isNotEmpty()) {
-            loadMessage.value = "已加载 ${urls.size} 个配置 / ${list.count { !it.builtin }} 个站点"
+            loadMessage.value = "已加载 ${urls.size} 个配置 / ${list.size} 个站点"
+        } else {
+            loadMessage.value = "配置未解析到站点，请检查配置链接"
         }
         _sites.value = list
         Prefs.saveSitesCache(list)
+
+        // 后台预热 spider jar（加速首次搜索）
+        val jars = list.map { it.jarUrl }.filter { it.isNotEmpty() }.distinct()
+        if (jars.isNotEmpty()) {
+            com.jay.video.App.appScope.launch {
+                jars.forEach { jar -> runCatching { SpiderLoader.loadJar(jar) } }
+            }
+        }
     }
 
     /** 启动时恢复（缓存优先，后台刷新） */
     fun restoreFromCache() {
         if (_configs.value.isEmpty()) {
             val cached = Prefs.sitesCache()
-            if (cached.isNotEmpty()) _sites.value = cached
+            if (cached.isNotEmpty()) {
+                _sites.value = cached
+                loadMessage.value = "已恢复 ${cached.size} 个站点"
+            }
         }
     }
 
@@ -172,9 +178,27 @@ class SiteRepo(
 
         val out = when (site.type) {
             0 -> searchXml(site, kw)
-            else -> searchJson(site, kw)   // 1 与 3(降级) 都走 json 尝试
+            3 -> if (site.jarUrl.isNotEmpty()) searchSpider(site, kw) else emptyList()
+            else -> searchJson(site, kw)
         }
         if (out.isNotEmpty()) cacheSet(cacheKey, out)
+        return out
+    }
+
+    /** type 3: spider 爬虫搜索（searchContent → TVBox JSON） */
+    private suspend fun searchSpider(site: Site, kw: String): List<VodItem> {
+        val raw = SpiderLoader.search(site.key, site.jarUrl, site.api, site.ext, kw) ?: return emptyList()
+        return parseVodList(raw, site)
+    }
+
+    /** 解析 TVBox/MacCMS 通用列表 JSON */
+    private fun parseVodList(raw: String, site: Site): List<VodItem> {
+        val list = parseList(raw) ?: return emptyList()
+        val out = mutableListOf<VodItem>()
+        for (item in list) {
+            val n = normItem(item, site) ?: continue
+            if (n.name.isNotEmpty()) out += n
+        }
         return out
     }
 
@@ -192,12 +216,7 @@ class SiteRepo(
         for (url in candidates) {
             val raw = httpGet(url) ?: continue
             if (raw.isEmpty()) continue
-            val list = parseList(raw) ?: continue
-            val out = mutableListOf<VodItem>()
-            for (item in list) {
-                val n = normItem(item, site) ?: continue
-                if (n.name.isNotEmpty()) out += n
-            }
+            val out = parseVodList(raw, site)
             if (out.isNotEmpty()) return out
         }
         return emptyList()
@@ -355,6 +374,16 @@ class SiteRepo(
         val cacheKey = "srcd:${site.key}|$vodId"
         cacheGet(cacheKey)?.let { return it as VodItem }
 
+        // spider 站点：detailContent
+        if (isSpiderSite(site)) {
+            val raw = SpiderLoader.detail(site.key, site.jarUrl, site.api, site.ext, vodId) ?: return null
+            val list = parseList(raw) ?: return null
+            if (list.isEmpty()) return null
+            val item = normItem(list[0], site) ?: return null
+            cacheSet(cacheKey, item)
+            return item
+        }
+
         val enc = java.net.URLEncoder.encode(vodId, "UTF-8")
         val sep = if (site.api.contains('?')) "&" else "?"
 
@@ -451,23 +480,6 @@ class SiteRepo(
         }
     }
 
-    /** 选择最佳分组（优先 m3u8 直链数量多者） */
-    fun pickBestGroup(groups: List<List<Episode>>): List<Episode> {
-        if (groups.isEmpty()) return emptyList()
-        if (groups.size == 1) return groups[0]
-        var best: List<Episode> = emptyList()
-        var bestScore = -1
-        for (g in groups) {
-            val m3u8 = g.count { isDirectUrl(it.url) }
-            val score = m3u8 * 100 + g.size
-            if (score > bestScore) {
-                bestScore = score
-                best = g
-            }
-        }
-        return best
-    }
-
     /** 是否为可直连播放的媒体地址 */
     fun isDirectUrl(url: String): Boolean {
         val u = url.trim()
@@ -504,6 +516,55 @@ class SiteRepo(
         return !(host.isNotEmpty() && host == srcHost)
     }
 
+    /* ---------- spider 播放解析 ---------- */
+
+    /**
+     * spider 站点播放地址解析：
+     * episode.url 是 playerContent 的 id，需二次解析为真实地址
+     */
+    private suspend fun resolveSpiderPlay(
+        site: Site, flag: String, id: String, label: String,
+        episodes: List<Episode>, itemName: String,
+    ): PlayResult {
+        val raw = SpiderLoader.player(site.key, site.jarUrl, site.api, site.ext, flag, id)
+        if (raw != null) {
+            try {
+                val obj = JsonParser.parseString(raw).asJsonObject
+                val url = obj.str("url") ?: ""
+                val headers = mutableMapOf<String, String>()
+                obj.get("header")?.takeIf { it.isJsonObject }?.asJsonObject?.let { h ->
+                    for ((k, v) in h.entrySet()) {
+                        if (v.isJsonPrimitive) headers[k] = v.asString
+                    }
+                }
+                if (url.isNotEmpty()) {
+                    val direct = isDirectUrl(url)
+                    return PlayResult(
+                        ok = true,
+                        url = url,
+                        label = label,
+                        episodes = episodes,
+                        name = itemName,
+                        sourceName = site.name,
+                        siteKey = site.key,
+                        headers = headers,
+                        webOnly = !direct,  // 非直链 → 网页解析播放（ffzyplay）
+                    )
+                }
+            } catch (e: Exception) {
+                // JSON 解析失败，降级
+            }
+        }
+        // playerContent 失败或无 url：若 id 本身是直链则直接用
+        if (isDirectUrl(id)) {
+            return PlayResult(
+                ok = true, url = id, label = label, episodes = episodes,
+                name = itemName, sourceName = site.name, siteKey = site.key,
+            )
+        }
+        return PlayResult(ok = false, err = "「${site.name}」播放地址解析失败", sourceName = site.name, siteKey = site.key)
+    }
+
     /* ---------- 季数识别 ---------- */
 
     private fun seasonCnNum(cn: String): Int {
@@ -516,6 +577,44 @@ class SiteRepo(
             return a * 10 + b
         }
         return if (cn.length == 1) (map[cn[0]] ?: 0) else 0
+    }
+
+    /** 阿拉伯数字 → 中文数字（1→一，12→十二） */
+    private fun cnSeason(n: Int): String {
+        val digits = listOf("", "一", "二", "三", "四", "五", "六", "七", "八", "九")
+        if (n <= 0) return ""
+        if (n < 10) return digits[n]
+        if (n == 10) return "十"
+        if (n < 20) return "十" + digits[n % 10]
+        val tens = digits[n / 10] + "十"
+        return tens + if (n % 10 == 0) "" else digits[n % 10]
+    }
+
+    /** 解析播放线路标签中的季数（"第一季"/"第2季"/"S02"），无季标识返回 0 */
+    fun labelSeasonNum(label: String): Int {
+        val l = label.trim()
+        if (l.isEmpty()) return 0
+        Regex("""第\s*(\d{1,2})\s*[季部]""").find(l)?.let { return it.groupValues[1].toIntOrNull() ?: 0 }
+        Regex("""第\s*([一二三四五六七八九十]{1,3})\s*[季部]""").find(l)?.let { return seasonCnNum(it.groupValues[1]) }
+        Regex("""(?:^|[^0-9])S\s*0*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE).find(l)?.let {
+            return it.groupValues[1].toIntOrNull() ?: 0
+        }
+        return 0
+    }
+
+    /** 条目是否包含指定季的播放分组（vod_play_from = "第一季$$$第二季"） */
+    private fun hasSeasonGroup(item: VodItem, sn: Int): Boolean =
+        item.from.split("$$$").any { labelSeasonNum(it.trim()) == sn }
+
+    /** 季检索关键词变体（中文/阿拉伯数字 × 带空格/紧凑，覆盖不同站的模糊匹配） */
+    private fun seasonKeywords(t: String, sn: Int): List<String> {
+        val cn = cnSeason(sn)
+        return linkedSetOf(
+            "${t}第${cn}季", "$t 第${cn}季",
+            "${t}第${sn}季", "$t 第${sn}季",
+            "${t}第${cn}部", "$t 第${cn}部",
+            "${t}第${sn}部", "$t 第${sn}部",
+        ).toList()
     }
 
     /** 解析条目名称中的季数；无季标识返回 0 */
@@ -555,15 +654,15 @@ class SiteRepo(
 
         var list = search(site, t)
         if (list.isEmpty() && sn > 1) {
-            for (suffix in listOf("第${sn}季", "第${sn}部")) {
-                list = search(site, "$t $suffix")
+            for (kw in seasonKeywords(t, sn)) {
+                list = search(site, kw)
                 if (list.isNotEmpty()) break
             }
         }
         if (list.isEmpty()) return fail("「${site.name}」未收录《$t》")
 
         // 标题相关度分级
-        val pureTitle = Regex("""\s*(国语|普通话|粤语|高清|完整|版)*${'$'}""").replace(t, "")
+        val pureTitle = Regex("""\s*(国语|普通话|粤语|高清|完整|版)*$""").replace(t, "")
         val exact = mutableListOf<VodItem>()
         val contains = mutableListOf<VodItem>()
         val loose = mutableListOf<VodItem>()
@@ -579,6 +678,7 @@ class SiteRepo(
 
         var item: VodItem? = null
         if (sn > 1) {
+            // 1) 名称明确标注该季（排除粤语版优先）
             outer@ for (allowYue in listOf(false, true)) {
                 for (it in pool) {
                     if (!allowYue && it.name.contains("粤语")) continue
@@ -588,49 +688,74 @@ class SiteRepo(
                     }
                 }
             }
+            // 2) 单条目合并多季（vod_play_from 分组带季标签）
             if (item == null) {
-                for (suffix in listOf("第${sn}季", "第${sn}部")) {
-                    val sub = search(site, "$t $suffix")
+                for (it in pool) {
+                    if (hasSeasonGroup(it, sn)) {
+                        item = it
+                        break
+                    }
+                }
+            }
+            // 3) 二次检索（中文/阿拉伯数字变体）
+            if (item == null) {
+                outer2@ for (kw in seasonKeywords(t, sn)) {
+                    val sub = search(site, kw)
                     for (it in sub) {
                         if (nameSeasonNum(it.name, t) == sn) {
                             item = it
-                            break
+                            break@outer2
                         }
                     }
-                    if (item != null) break
                 }
             }
-        }
-        if (item == null) {
-            val unmarked = mutableListOf<VodItem>()
+            // 未找到对应季：快速失败，交由其它站点（避免错放第一季内容）
+            if (item == null) return fail("「${site.name}」未收录《$t》第${sn}季")
+        } else {
+            // 第一季：优先明确标注，其次无季标注条目
             for (it in candidates) {
-                val s = nameSeasonNum(it.name, t)
-                if (s == sn) {
+                if (nameSeasonNum(it.name, t) == 1) {
                     item = it
                     break
                 }
-                if (s == 0) unmarked += it
             }
-            if (item == null && sn == 1 && unmarked.isNotEmpty()) item = unmarked[0]
+            if (item == null) {
+                for (it in candidates) {
+                    if (nameSeasonNum(it.name, t) == 0) {
+                        item = it
+                        break
+                    }
+                }
+            }
+            if (item == null) item = candidates[0]
         }
-        if (item == null) item = candidates[0]
 
         if (item.play.isEmpty() && item.id.isNotEmpty()) {
             item = fetchDetail(site, item.id) ?: item
         }
         if (item.play.isEmpty()) return fail("「${site.name}」未返回播放地址")
 
-        val eps = pickBestGroup(parsePlayGroups(item.play))
-        if (eps.isEmpty()) return fail("播放地址解析失败")
+        // 选择线路：多季合并条目优先按季标签选组，否则选直链最多的线路
+        val lines = playLines(item)
+        if (lines.isEmpty()) return fail("播放地址解析失败")
+        val line = lines.firstOrNull { l -> labelSeasonNum(l.label) == sn }
+            ?: lines.maxByOrNull { l -> l.episodes.count { isDirectUrl(it.url) } * 100 + l.episodes.size }
+            ?: lines[0]
 
-        val chosen = pickEpisode(eps, episode) ?: return fail("播放集数不存在")
+        val chosen = pickEpisode(line.episodes, episode) ?: return fail("播放集数不存在")
+
+        // spider 站点：chosen.url 是 playerContent 的 id
+        if (isSpiderSite(site)) {
+            return resolveSpiderPlay(site, line.label, chosen.url, chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" }, line.episodes, item.name)
+        }
+
         if (!validMediaUrl(chosen.url, site.api)) return fail("「${site.name}」播放直链不可用")
 
         return PlayResult(
             ok = true,
             url = chosen.url,
             label = chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" },
-            episodes = eps,
+            episodes = line.episodes,
             name = item.name,
             sourceName = site.name,
             siteKey = site.key,
@@ -668,7 +793,6 @@ class SiteRepo(
             }
             var firstOk: PlayResult? = null
             var lastErr = r
-            // 等全部完成，取第一个成功
             for (d in deferreds) {
                 val res = d.await()
                 if (res != null) {
@@ -680,12 +804,28 @@ class SiteRepo(
         }
     }
 
-    /** 直接从 VodItem 构建播放结果（资源站搜索直连播放用） */
-    fun directResult(item: VodItem, episode: Int, lineIndex: Int = -1): PlayResult {
+    /** 直接从 VodItem 构建播放结果（资源站搜索直连播放用；spider 站点自动调 playerContent） */
+    suspend fun directResult(item: VodItem, episode: Int, lineIndex: Int = -1): PlayResult {
         val lines = playLines(item)
         if (lines.isEmpty()) return PlayResult(ok = false, err = "播放地址解析失败", sourceName = item.siteName, siteKey = item.siteKey)
-        val line = if (lineIndex in lines.indices) lines[lineIndex] else lines.maxByOrNull { it.episodes.count { e -> isDirectUrl(e.url) } } ?: lines[0]
-        val chosen = pickEpisode(line.episodes, episode) ?: return PlayResult(ok = false, err = "播放集数不存在", sourceName = item.siteName, siteKey = item.siteKey)
+        val line = if (lineIndex in lines.indices) {
+            lines[lineIndex]
+        } else {
+            lines.maxByOrNull { it.episodes.count { e -> isDirectUrl(e.url) } } ?: lines[0]
+        }
+        val chosen = pickEpisode(line.episodes, episode)
+            ?: return PlayResult(ok = false, err = "播放集数不存在", sourceName = item.siteName, siteKey = item.siteKey)
+
+        // spider 站点：episode.url 是 playerContent 的 id
+        val site = siteOf(item.siteKey)
+        if (isSpiderSite(site)) {
+            return resolveSpiderPlay(
+                site!!, line.label, chosen.url,
+                chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" },
+                line.episodes, item.name,
+            )
+        }
+
         return PlayResult(
             ok = true,
             url = chosen.url,

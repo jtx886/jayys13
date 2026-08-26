@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.jay.video.data.local.AppDatabase
 import com.jay.video.data.source.Prefs
 import com.jay.video.data.source.SiteRepo
+import com.jay.video.data.source.SpiderLoader
 import com.jay.video.data.tmdb.TmdbApi
 import com.jay.video.data.tmdb.TmdbRepo
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,7 @@ object App {
 
         gson = Gson()
         Prefs.init(CtxHolder.app)
+        SpiderLoader.init(CtxHolder.app)
         db = AppDatabase.build(CtxHolder.app)
         tmdb = TmdbRepo(api)
         source = SiteRepo(plain, gson)

@@ -1,6 +1,10 @@
 package com.jay.video.ui.player
 
 import android.view.ViewGroup
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,6 +26,7 @@ import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -61,16 +65,19 @@ import com.jay.video.App
 import com.jay.video.data.DirectPlay
 import com.jay.video.data.Episode
 import com.jay.video.data.Season
+import com.jay.video.data.source.Prefs
 import com.jay.video.data.source.VodItem
 import com.jay.video.ui.theme.Bg
 import com.jay.video.ui.theme.Bg2
 import com.jay.video.ui.theme.Primary
+import com.jay.video.ui.theme.Text1
 import com.jay.video.ui.theme.Text2
 import com.jay.video.ui.theme.Text3
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 
 class PlayerViewModel : ViewModel() {
     data class UiState(
@@ -85,10 +92,13 @@ class PlayerViewModel : ViewModel() {
         val currentLabel: String = "",
         val sourceName: String = "",
         val siteKey: String = "",
+        val headers: Map<String, String> = emptyMap(),
+        val webOnly: Boolean = false,          // 需网页解析播放
+        val webMode: Boolean = false,          // 当前为网页播放模式
         val playErr: String = "",
         val playerErr: String = "",
-        val switching: Boolean = false,   // 正在自动换源
-        val attempt: Int = 0,             // 重新装载计数（强制刷新播放器）
+        val switching: Boolean = false,        // 正在自动换源
+        val attempt: Int = 0,                  // 重新装载计数（强制刷新播放器）
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -104,6 +114,12 @@ class PlayerViewModel : ViewModel() {
     // 自动换源
     private val failedSites = mutableSetOf<String>()
     private var failCount = 0
+
+    /** 网页播放地址（解析器 + 视频地址） */
+    fun webPlayUrl(): String {
+        val url = _state.value.currentUrl
+        return Prefs.parseUrl() + URLEncoder.encode(url, "UTF-8")
+    }
 
     /** 保存观看历史（供播放页调用；直连模式不入库） */
     fun saveProgress(positionMs: Long, durationMs: Long) {
@@ -170,6 +186,28 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
+    /** 应用解析结果到状态 */
+    private fun applyResult(r: com.jay.video.data.PlayResult) {
+        if (r.ok) {
+            _state.value = _state.value.copy(
+                episodes = r.episodes,
+                currentUrl = r.url,
+                currentLabel = r.label,
+                sourceName = r.sourceName,
+                siteKey = r.siteKey,
+                headers = r.headers,
+                webOnly = r.webOnly,
+                webMode = r.webOnly,   // 非直链自动进入网页播放
+                playerErr = "",
+                playErr = "",
+                switching = false,
+                attempt = _state.value.attempt + 1,
+            )
+        } else {
+            _state.value = _state.value.copy(switching = false, playErr = r.err)
+        }
+    }
+
     /** 直连播放模式：来自资源站搜索结果 */
     private fun loadDirect() {
         val data = DirectPlay.data
@@ -196,18 +234,9 @@ class PlayerViewModel : ViewModel() {
             poster = data.pic,
             episode = data.episode,
         )
-        val r = App.source.directResult(item, data.episode, directLineIdx)
-        if (r.ok) {
-            _state.value = _state.value.copy(
-                episodes = r.episodes,
-                currentUrl = r.url,
-                currentLabel = r.label,
-                sourceName = r.sourceName,
-                siteKey = r.siteKey,
-                attempt = 1,
-            )
-        } else {
-            _state.value = _state.value.copy(playErr = r.err)
+        viewModelScope.launch {
+            val r = App.source.directResult(item, data.episode, directLineIdx)
+            applyResult(r)
         }
     }
 
@@ -218,37 +247,55 @@ class PlayerViewModel : ViewModel() {
         if (title.isEmpty()) return
         _state.value = s.copy(
             season = season, episode = episode,
-            playErr = "", playerErr = "", currentUrl = "", switching = true,
+            playErr = "", playerErr = "", currentUrl = "", switching = true, webMode = false,
         )
         viewModelScope.launch {
             val r = App.source.resolveAny(title, episode, season, excludeKeys = failedSites)
-            if (r.ok) {
-                _state.value = _state.value.copy(
-                    switching = false,
-                    episodes = r.episodes,
-                    currentUrl = r.url,
-                    currentLabel = r.label,
-                    sourceName = r.sourceName,
-                    siteKey = r.siteKey,
-                    attempt = _state.value.attempt + 1,
-                )
-            } else {
-                _state.value = _state.value.copy(switching = false, playErr = r.err)
-            }
+            applyResult(r)
         }
     }
 
     fun selectEpisode(ep: Int) {
         val s = _state.value
         val eps = s.episodes
+
+        // 直连模式：重新解析（spider 站点需调 playerContent）
+        if (type == "direct") {
+            val item = directItem
+            if (item != null) {
+                _state.value = s.copy(episode = ep, playerErr = "", playErr = "", switching = true, webMode = false)
+                viewModelScope.launch {
+                    val r = App.source.directResult(item, ep, directLineIdx)
+                    applyResult(r)
+                }
+                return
+            }
+        }
+
         if (eps.isEmpty()) { resolve(s.season, ep); return }
         val idx = ep - 1
         if (idx < 0 || idx >= eps.size) return
+
+        // spider 站点的剧集 url 是 playerContent id，需重新解析
+        val site = App.source.siteOf(s.siteKey)
+        if (App.source.isSpiderSite(site)) {
+            _state.value = s.copy(episode = ep, playerErr = "", switching = true, webMode = false)
+            viewModelScope.launch {
+                val r = App.source.resolveAny(
+                    s.title, ep, s.season,
+                    preferredKey = s.siteKey, excludeKeys = emptySet(),
+                )
+                applyResult(r)
+            }
+            return
+        }
+
         _state.value = s.copy(
             episode = ep,
             currentUrl = eps[idx].url,
             currentLabel = eps[idx].name.ifEmpty { "第${ep}集" },
             playerErr = "",
+            webMode = false,
             attempt = s.attempt + 1,
         )
     }
@@ -267,10 +314,17 @@ class PlayerViewModel : ViewModel() {
         if (s.episode > 1) selectEpisode(s.episode - 1)
     }
 
+    /** 切换 系统播放 / 网页播放 */
+    fun toggleWebMode() {
+        val s = _state.value
+        if (s.currentUrl.isEmpty()) return
+        _state.value = s.copy(webMode = !s.webMode, playerErr = "")
+    }
+
     /** 播放器出错回调：自动换源（最多3次） */
     fun onPlayerFailed() {
         val s = _state.value
-        if (s.currentUrl.isEmpty()) return
+        if (s.currentUrl.isEmpty() || s.webMode) return
         failCount++
 
         if (type == "direct") {
@@ -280,13 +334,13 @@ class PlayerViewModel : ViewModel() {
             if (failCount <= 2 && lines.size > 1) {
                 switchDirectLine()
             } else {
-                _state.value = s.copy(playerErr = "播放失败，点击切换线路重试")
+                _state.value = s.copy(playerErr = "播放失败，可尝试网页播放或切换线路")
             }
             return
         }
 
         if (failCount > 3) {
-            _state.value = s.copy(playerErr = "多个播放源均失败，点击重试")
+            _state.value = s.copy(playerErr = "多个播放源均失败，可尝试网页播放")
             return
         }
         // 记录失败站点，自动换源
@@ -300,21 +354,10 @@ class PlayerViewModel : ViewModel() {
         val lines = App.source.playLines(item)
         if (lines.isEmpty()) return
         directLineIdx = (directLineIdx + 1).mod(lines.size)
-        val r = App.source.directResult(item, _state.value.episode, directLineIdx)
-        if (r.ok) {
-            _state.value = _state.value.copy(
-                episodes = r.episodes,
-                currentUrl = r.url,
-                currentLabel = r.label,
-                sourceName = r.sourceName,
-                siteKey = r.siteKey,
-                playerErr = "",
-                playErr = "",
-                switching = false,
-                attempt = _state.value.attempt + 1,
-            )
-        } else {
-            _state.value = _state.value.copy(playerErr = "播放失败，点击切换线路重试")
+        _state.value = _state.value.copy(switching = true, playerErr = "")
+        viewModelScope.launch {
+            val r = App.source.directResult(item, _state.value.episode, directLineIdx)
+            applyResult(r)
         }
     }
 
@@ -329,17 +372,10 @@ class PlayerViewModel : ViewModel() {
                     switchDirectLine()
                     return
                 }
-                val r = App.source.directResult(item, _state.value.episode, directLineIdx)
-                if (r.ok) {
-                    _state.value = _state.value.copy(
-                        currentUrl = r.url,
-                        currentLabel = r.label,
-                        playerErr = "",
-                        playErr = "",
-                        attempt = _state.value.attempt + 1,
-                    )
-                } else {
-                    _state.value = _state.value.copy(playErr = r.err)
+                _state.value = _state.value.copy(switching = true, playerErr = "")
+                viewModelScope.launch {
+                    val r = App.source.directResult(item, _state.value.episode, directLineIdx)
+                    applyResult(r)
                 }
                 return
             }
@@ -363,19 +399,28 @@ fun PlayerScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // ExoPlayer 实例
-    val player = remember {
-        val dsFactory = DefaultHttpDataSource.Factory()
+    // ExoPlayer 数据源工厂（headers 可动态更新）
+    val dsFactory = remember {
+        DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) JayVideo/1.0")
             .setConnectTimeoutMs(8000)
             .setReadTimeoutMs(15000)
             .setAllowCrossProtocolRedirects(true)
+    }
+
+    // ExoPlayer 实例
+    val player = remember {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dsFactory))
             .build()
     }
 
     var resumed by remember { mutableStateOf(false) }
+
+    // headers 变化 → 更新数据源默认请求头
+    LaunchedEffect(state.headers) {
+        dsFactory.setDefaultRequestProperties(state.headers)
+    }
 
     // 播放地址变化 → 切换媒体源（attempt 变化时强制重载）
     LaunchedEffect(state.currentUrl, state.attempt) {
@@ -409,12 +454,19 @@ fun PlayerScreen(
         resumed = true
     }
 
-    // 定时保存进度
+    // 定时保存进度（网页播放模式暂停系统播放器）
     LaunchedEffect(Unit) {
         while (true) {
             delay(5000)
-            if (player.isPlaying) vm.saveProgress(player.currentPosition, player.duration)
+            if (player.isPlaying && !state.webMode) {
+                vm.saveProgress(player.currentPosition, player.duration)
+            }
         }
+    }
+
+    // 网页模式切换：暂停/恢复系统播放器
+    LaunchedEffect(state.webMode) {
+        if (state.webMode) player.pause() else if (state.currentUrl.isNotEmpty()) player.play()
     }
 
     // 播放状态监听（结束自动下一集 / 失败自动换源）
@@ -441,32 +493,78 @@ fun PlayerScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Bg)) {
-        // 播放器区域
+        // 播放器区域（系统 / 网页 切换）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .background(Color.Black),
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        this.player = player
-                        useController = true
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (state.webMode) {
+                // 网页播放（ffzyplay 解析器）
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = false
+                            settings.cacheMode = WebSettings.LOAD_DEFAULT
+                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36"
+                            webViewClient = WebViewClient()
+                            webChromeClient = WebChromeClient()
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+                        }
+                    },
+                    update = { wv ->
+                        val target = vm.webPlayUrl()
+                        if (wv.url != target) wv.loadUrl(target)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            this.player = player
+                            useController = true
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             // 返回按钮悬浮
             IconButton(
                 onClick = onBack,
                 modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
+            }
+            // 网页播放切换按钮（悬浮右上）
+            if (state.currentUrl.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable { vm.toggleWebMode() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Language, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                    Text(
+                        if (state.webMode) " 系统播放" else " 网页播放",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                    )
+                }
             }
         }
 
@@ -480,7 +578,7 @@ fun PlayerScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     state.title.ifEmpty { "加载中…" },
-                    color = com.jay.video.ui.theme.Text1,
+                    color = Text1,
                     fontSize = 15.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -521,7 +619,7 @@ fun PlayerScreen(
                     color = Primary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp),
                 )
                 Text(
-                    "  播放失败，正在自动换源…",
+                    "  正在解析播放地址…",
                     color = Text2,
                     fontSize = 12.5.sp,
                 )
@@ -545,7 +643,20 @@ fun PlayerScreen(
                     "  ${(state.playerErr.ifEmpty { state.playErr })}，点击重试",
                     color = Text2,
                     fontSize = 12.5.sp,
+                    modifier = Modifier.weight(1f),
                 )
+                if (state.currentUrl.isNotEmpty() && !state.webMode) {
+                    Text(
+                        "网页播放",
+                        color = Primary,
+                        fontSize = 12.5.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Primary.copy(alpha = 0.12f))
+                            .clickable { vm.toggleWebMode() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
             }
         }
 

@@ -150,7 +150,6 @@ fun AppRoot() {
             composable(Routes.SEARCH) {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
-                    onOpenDetail = { t, i, s -> nav.navigate(Routes.detail(t, i, s)) },
                     onDirectPlay = { nav.navigate(Routes.player("direct", 0, 0, 1)) },
                 )
             }

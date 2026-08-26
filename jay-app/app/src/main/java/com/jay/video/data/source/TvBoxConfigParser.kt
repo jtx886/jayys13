@@ -13,7 +13,8 @@ import java.util.concurrent.TimeUnit
  * 影视仓/TVBox 配置解析器
  * 支持标准格式：
  * {
- *   "sites": [ {"key":"..","name":"..","type":1,"api":"..","ext":"..","searchable":1} ],
+ *   "spider": "https://xxx.jar;md5;xxx",
+ *   "sites": [ {"key":"..","name":"..","type":3,"api":"csp_XXX","ext":"..","searchable":1} ],
  *   "lives": [...], "parses": [...], "wallpaper": ".."
  * }
  * 兼容 base64 编码的配置内容。
@@ -66,6 +67,9 @@ object TvBoxConfigParser {
         val wallpaper = root.str("wallpaper") ?: ""
         val parses = root.getAsJsonArray("parses")?.size() ?: 0
 
+        // spider jar 地址（type:3 站点依赖）
+        val spiderJar = root.str("spider") ?: ""
+
         // sites / site 两种字段名兼容
         val sitesArr = root.getAsJsonArray("sites") ?: root.getAsJsonArray("site")
         val sites = mutableListOf<Site>()
@@ -96,8 +100,12 @@ object TvBoxConfigParser {
                     }
                 }
 
+                // ext 也可能指向一个 URL（type:0/1 的扩展配置），保持原样传给 spider
                 if (api.isBlank()) continue
                 val searchable = o.str("searchable")?.let { it != "0" } ?: true
+
+                // type:3 站点绑定配置级 spider jar
+                val jar = if (type == 3) (o.str("jar") ?: spiderJar) else ""
 
                 sites += Site(
                     key = key,
@@ -107,10 +115,11 @@ object TvBoxConfigParser {
                     ext = ext,
                     searchable = searchable,
                     fromConfig = fromUrl,
+                    jarUrl = jar,
                 )
             }
         }
-        return TvBoxConfig(sites = sites, wallpaper = wallpaper, parseCount = parses)
+        return TvBoxConfig(sites = sites, spider = spiderJar, wallpaper = wallpaper, parseCount = parses)
     }
 
     private fun JsonObject.str(vararg keys: String): String? {
