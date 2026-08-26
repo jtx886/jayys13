@@ -195,11 +195,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$errors) {
         try {
+            date_default_timezone_set('Asia/Shanghai');
             $pdo = new PDO(
                 "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
                 $dbUser, $dbPass,
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10]
             );
+            /* 会话时区与 PHP 对齐，避免相对时间错位 */
+            $pdo->exec("SET time_zone = '" . date('P') . "'");
         } catch (Throwable $e) {
             $errors[] = '数据库连接失败：' . $e->getMessage();
         }

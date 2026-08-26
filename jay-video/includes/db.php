@@ -13,6 +13,8 @@ function db(): PDO
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
+            /* 会话时区与 PHP 对齐：保证 NOW() 与 PHP 解析使用同一时区，避免相对时间错位 */
+            $pdo->exec("SET time_zone = '" . date('P') . "'");
         } catch (PDOException $e) {
             die('<div style="padding:40px;font-family:sans-serif;background:#0a0e15;color:#e9edf5;min-height:100vh">
             <h2 style="color:#ff5d5d">数据库连接失败</h2><p style="color:#8b98af">' . htmlspecialchars($e->getMessage()) . '</p>
