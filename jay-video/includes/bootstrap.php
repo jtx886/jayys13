@@ -15,6 +15,9 @@ if (!defined('JAY_BOOTSTRAP')) {
         exit;
     }
 
+    /* 统一时区：须在加载 db.php 前设置，数据库会话时区将与之对齐 */
+    date_default_timezone_set('Asia/Shanghai');
+
     require_once __DIR__ . '/config.php';
     require_once __DIR__ . '/db.php';
     require_once __DIR__ . '/functions.php';
@@ -26,7 +29,6 @@ if (!defined('JAY_BOOTSTRAP')) {
         session_name('JAYSESSID');
         session_start();
     }
-    date_default_timezone_set('Asia/Shanghai');
 
     /* 登录用户处于封禁期：强制下线 */
     $u = current_user();
