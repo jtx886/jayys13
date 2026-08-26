@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +42,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +68,7 @@ import com.jay.video.App
 import com.jay.video.data.DirectPlay
 import com.jay.video.data.DirectPlayData
 import com.jay.video.data.source.PlayLine
+import com.jay.video.data.source.SpiderLoader
 import com.jay.video.data.source.VodItem
 import com.jay.video.ui.components.EmptyBox
 import com.jay.video.ui.components.LoadingBox
@@ -85,6 +89,7 @@ class SearchViewModel : ViewModel() {
         val searching: Boolean = false,
         val searched: Boolean = false,
         val results: List<Pair<String, List<VodItem>>> = emptyList(), // siteName to items
+        val err: String = "",
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -96,11 +101,15 @@ class SearchViewModel : ViewModel() {
         if (kw.isEmpty()) return
         _state.value = UiState(keyword = kw, searching = true, searched = true)
         viewModelScope.launch {
+            SpiderLoader.clearError()
+            var hasResult = false
             App.source.searchAll(kw) { site, results ->
+                hasResult = hasResult || results.isNotEmpty()
                 val cur = _state.value
                 _state.value = cur.copy(results = cur.results + (site.name to results))
             }
-            _state.value = _state.value.copy(searching = false)
+            val finalErr = if (hasResult) "" else SpiderLoader.lastError.ifEmpty { "全部站点无结果" }
+            _state.value = _state.value.copy(searching = false, err = finalErr)
         }
     }
 }
@@ -161,7 +170,26 @@ fun SearchScreen(
         when {
             !state.searched -> EmptyBox("输入片名，聚合搜索全部播放源")
             state.searching && state.results.isEmpty() -> LoadingBox(Modifier.fillMaxSize())
-            state.results.all { it.second.isEmpty() } && !state.searching -> EmptyBox("所有源均未找到该片")
+            state.results.all { it.second.isEmpty() } && !state.searching -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        state.err.ifEmpty { "所有源均未找到该片" },
+                        color = Text2,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        "首次搜索需下载爬虫组件，失败后稍等一分钟重试即可",
+                        color = Text3,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
             else -> {
                 val flat = state.results.flatMap { it.second }
                 Column(Modifier.fillMaxSize()) {
@@ -293,8 +321,28 @@ private fun SourceDetailSheet(
     onDismiss: () -> Unit,
     onPlay: (VodItem, Int, Int) -> Unit,
 ) {
-    val lines = remember(item) { App.source.playLines(item) }
-    var lineIdx by remember(item) {
+    // spider 站点搜索结果不含播放串（vod_play_url），需先 detailContent 拉详情
+    var detail by remember(item) { mutableStateOf(item) }
+    var loading by remember(item) { mutableStateOf(item.play.isEmpty()) }
+    var err by remember(item) { mutableStateOf("") }
+
+    LaunchedEffect(item) {
+        if (item.play.isEmpty() && item.id.isNotEmpty()) {
+            loading = true
+            err = ""
+            val site = App.source.siteOf(item.siteKey)
+            val d = site?.let { runCatching { App.source.fetchDetail(it, item.id) }.getOrNull() }
+            if (d != null && d.play.isNotEmpty()) {
+                detail = d
+            } else {
+                err = SpiderLoader.lastError.ifEmpty { "播放信息加载失败，请重试" }
+            }
+            loading = false
+        }
+    }
+
+    val lines = remember(detail) { App.source.playLines(detail) }
+    var lineIdx by remember(detail) {
         mutableIntStateOf(lines.indexOfFirst { l -> l.episodes.any { App.source.isDirectUrl(it.url) } }.takeIf { it >= 0 } ?: 0)
     }
     val line = lines.getOrNull(lineIdx) ?: PlayLine("线路", emptyList())
@@ -354,7 +402,18 @@ private fun SourceDetailSheet(
             Spacer(Modifier.height(14.dp))
 
             // 线路选择
-            if (lines.size > 1) {
+            if (loading) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Primary, modifier = Modifier.size(28.dp))
+                        Text("正在获取播放信息…", color = Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                    }
+                }
+            } else if (err.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                    Text(err, color = Text3, fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
+            } else if (lines.size > 1) {
                 Text("播放线路", color = Text2, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     rowItems(lines) { l ->
@@ -398,7 +457,7 @@ private fun SourceDetailSheet(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Panel)
-                                    .clickable { onPlay(item, globalIdx + 1, lineIdx) }
+                                    .clickable { onPlay(detail, globalIdx + 1, lineIdx) }
                                     .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
