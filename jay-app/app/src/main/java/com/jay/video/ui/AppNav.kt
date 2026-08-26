@@ -5,11 +5,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,12 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.navigation.NavType
 import com.jay.video.ui.category.CategoryScreen
 import com.jay.video.ui.detail.DetailScreen
 import com.jay.video.ui.favorite.FavoriteScreen
@@ -40,6 +42,7 @@ import com.jay.video.ui.history.HistoryScreen
 import com.jay.video.ui.home.HomeScreen
 import com.jay.video.ui.player.PlayerScreen
 import com.jay.video.ui.search.SearchScreen
+import com.jay.video.ui.settings.SettingsScreen
 import com.jay.video.ui.theme.Bg
 import com.jay.video.ui.theme.Primary
 import com.jay.video.ui.theme.Text1
@@ -50,11 +53,13 @@ object Routes {
     const val CATEGORY = "category"
     const val FAVORITE = "favorite"
     const val HISTORY = "history"
+    const val SETTINGS = "settings"
     const val SEARCH = "search"
-    const val DETAIL = "detail/{type}/{id}"
+    const val DETAIL = "detail/{type}/{id}?season={season}"
     const val PLAYER = "player/{type}/{id}/{season}/{episode}"
 
-    fun detail(type: String, id: Int) = "detail/$type/$id"
+    fun detail(type: String, id: Int, season: Int = 0) =
+        if (season > 0) "detail/$type/$id?season=$season" else "detail/$type/$id?season=0"
     fun player(type: String, id: Int, season: Int = 1, episode: Int = 1) = "player/$type/$id/$season/$episode"
 }
 
@@ -72,6 +77,7 @@ fun AppRoot() {
         TabItem(Routes.CATEGORY, "分类", Icons.Outlined.VideoLibrary, Icons.Filled.VideoLibrary),
         TabItem(Routes.FAVORITE, "收藏", Icons.Outlined.FavoriteBorder, Icons.Filled.Favorite),
         TabItem(Routes.HISTORY, "历史", Icons.Outlined.History, Icons.Filled.History),
+        TabItem(Routes.SETTINGS, "我的", Icons.Outlined.Person, Icons.Filled.Person),
     )
     val isTopLevel = current in tabs.map { it.route }
 
@@ -138,10 +144,14 @@ fun AppRoot() {
             composable(Routes.HISTORY) {
                 HistoryScreen(onOpenDetail = { t, i -> nav.navigate(Routes.detail(t, i)) })
             }
+            composable(Routes.SETTINGS) {
+                SettingsScreen()
+            }
             composable(Routes.SEARCH) {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
-                    onOpenDetail = { t, i -> nav.navigate(Routes.detail(t, i)) },
+                    onOpenDetail = { t, i, s -> nav.navigate(Routes.detail(t, i, s)) },
+                    onDirectPlay = { nav.navigate(Routes.player("direct", 0, 0, 1)) },
                 )
             }
             composable(
@@ -149,13 +159,19 @@ fun AppRoot() {
                 arguments = listOf(
                     navArgument("type") { type = NavType.StringType },
                     navArgument("id") { type = NavType.IntType },
+                    navArgument("season") {
+                        type = NavType.IntType
+                        defaultValue = 0
+                    },
                 ),
             ) { entry ->
                 val type = entry.arguments?.getString("type") ?: "movie"
                 val id = entry.arguments?.getInt("id") ?: 0
+                val season = entry.arguments?.getInt("season") ?: 0
                 DetailScreen(
                     type = type,
                     id = id,
+                    initialSeason = season,
                     onBack = { nav.popBackStack() },
                     onPlay = { t, i, s, e -> nav.navigate(Routes.player(t, i, s, e)) },
                 )

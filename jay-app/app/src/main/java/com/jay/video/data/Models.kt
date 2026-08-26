@@ -16,6 +16,7 @@ data class Season(
     val number: Int,
     val name: String,
     val episodeCount: Int,
+    val poster: String = "",   // 该季海报
 )
 
 data class Cast(
@@ -54,19 +55,34 @@ data class PlayResult(
     val name: String = "",
     val err: String = "",
     val sourceName: String = "",
+    val siteKey: String = "",
 )
 
-data class PlaySource(
-    val id: Int,
-    val name: String,
-    val apiUrl: String,
-    val isDefault: Boolean = false,
+/** 直连播放数据（资源站搜索 → 直接播放，跳过TMDB） */
+data class DirectPlayData(
+    val title: String,
+    val pic: String,
+    val note: String,
+    val itemJson: String,      // VodItem 序列化（含播放串）
+    val episode: Int = 1,
+    val lineIndex: Int = -1,
 )
 
-object PlaySources {
-    val ALL = listOf(
-        PlaySource(1, "非凡影视", "https://api.yyzy-tv.vip/inc/apijson.php", isDefault = true),
-        PlaySource(2, "量子影视", "https://cj.lziapi.com/api.php/provide/vod"),
-    )
-    val DEFAULT get() = ALL.first { it.isDefault }
+/** 直连播放临时传递（避免超长URL进路由） */
+object DirectPlay {
+    @Volatile
+    var data: DirectPlayData? = null
+}
+
+/** 搜索结果卡片（支持分季展开：season>0 表示具体某一季） */
+data class SearchCard(
+    val media: Media,
+    val season: Int = 0,             // 0=整部 / >0=指定季
+    val seasonName: String = "",     // "第 2 季"
+    val posterOverride: String = "", // 季海报（空则用主海报）
+    val yearOverride: String = "",   // 季年份
+) {
+    val displayTitle: String get() = if (season > 0 && seasonName.isNotEmpty()) "${media.title} $seasonName" else media.title
+    val displayPoster: String get() = posterOverride.ifEmpty { media.poster }
+    val displayYear: String get() = yearOverride.ifEmpty { media.year }
 }

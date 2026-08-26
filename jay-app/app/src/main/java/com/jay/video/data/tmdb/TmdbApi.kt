@@ -40,12 +40,14 @@ interface TmdbApi {
     suspend fun movieDetail(
         @Path("id") id: Int,
         @Query("language") language: String,
+        @Query("append_to_response") append: String = "credits",
     ): DetailResponse
 
     @GET("tv/{id}")
     suspend fun tvDetail(
         @Path("id") id: Int,
         @Query("language") language: String,
+        @Query("append_to_response") append: String = "credits",
     ): DetailResponse
 
     @GET("tv/{id}/season/{n}")
@@ -107,6 +109,7 @@ data class RawSeason(
     val name: String? = null,
     @SerializedName("episode_count") val episodeCount: Int = 0,
     @SerializedName("poster_path") val posterPath: String? = null,
+    @SerializedName("air_date") val airDate: String? = null,
     val overview: String? = null,
 )
 

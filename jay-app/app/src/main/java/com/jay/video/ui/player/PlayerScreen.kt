@@ -58,8 +58,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.jay.video.App
+import com.jay.video.data.DirectPlay
 import com.jay.video.data.Episode
 import com.jay.video.data.Season
+import com.jay.video.data.source.VodItem
 import com.jay.video.ui.theme.Bg
 import com.jay.video.ui.theme.Bg2
 import com.jay.video.ui.theme.Primary
@@ -82,8 +84,11 @@ class PlayerViewModel : ViewModel() {
         val currentUrl: String = "",
         val currentLabel: String = "",
         val sourceName: String = "",
+        val siteKey: String = "",
         val playErr: String = "",
         val playerErr: String = "",
+        val switching: Boolean = false,   // 正在自动换源
+        val attempt: Int = 0,             // 重新装载计数（强制刷新播放器）
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -92,8 +97,17 @@ class PlayerViewModel : ViewModel() {
     private var type = "movie"
     private var id = 0
 
-    /** 保存观看历史（供播放页调用） */
+    // 直连播放（资源站搜索 → 直接播放）
+    private var directItem: VodItem? = null
+    private var directLineIdx = -1
+
+    // 自动换源
+    private val failedSites = mutableSetOf<String>()
+    private var failCount = 0
+
+    /** 保存观看历史（供播放页调用；直连模式不入库） */
     fun saveProgress(positionMs: Long, durationMs: Long) {
+        if (type == "direct") return
         val s = _state.value
         if (s.title.isEmpty() || s.currentUrl.isEmpty()) return
         if (positionMs <= 0) return
@@ -117,6 +131,12 @@ class PlayerViewModel : ViewModel() {
     }
 
     fun load(t: String, i: Int, season: Int, episode: Int) {
+        if (t == "direct") {
+            type = "direct"
+            id = 0
+            loadDirect()
+            return
+        }
         if (type == t && id == i && !_state.value.loading && _state.value.episodes.isNotEmpty()) {
             // 已加载：直接切集
             if (_state.value.season != season) changeSeason(season, episode) else selectEpisode(episode)
@@ -150,23 +170,70 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
-    /** 解析指定季+集的播放地址 */
-    private fun resolve(season: Int, episode: Int, keepTitle: Boolean = false) {
+    /** 直连播放模式：来自资源站搜索结果 */
+    private fun loadDirect() {
+        val data = DirectPlay.data
+        if (data == null) {
+            _state.value = UiState(loading = false, playErr = "播放数据已过期，请重新搜索")
+            return
+        }
+        DirectPlay.data = null // 消费一次性数据
+        val item = runCatching { App.gson.fromJson(data.itemJson, VodItem::class.java) }.getOrNull()
+        if (item == null || item.play.isEmpty()) {
+            _state.value = UiState(loading = false, title = data.title, poster = data.pic, playErr = "播放地址解析失败")
+            return
+        }
+        directItem = item
+        val lines = App.source.playLines(item)
+        directLineIdx = if (data.lineIndex in lines.indices) {
+            data.lineIndex
+        } else {
+            lines.indexOfFirst { l -> l.episodes.any { App.source.isDirectUrl(it.url) } }.takeIf { it >= 0 } ?: 0
+        }
+        _state.value = UiState(
+            loading = false,
+            title = data.title,
+            poster = data.pic,
+            episode = data.episode,
+        )
+        val r = App.source.directResult(item, data.episode, directLineIdx)
+        if (r.ok) {
+            _state.value = _state.value.copy(
+                episodes = r.episodes,
+                currentUrl = r.url,
+                currentLabel = r.label,
+                sourceName = r.sourceName,
+                siteKey = r.siteKey,
+                attempt = 1,
+            )
+        } else {
+            _state.value = _state.value.copy(playErr = r.err)
+        }
+    }
+
+    /** 解析指定季+集的播放地址（自动换源时排除已失败站点） */
+    private fun resolve(season: Int, episode: Int) {
         val s = _state.value
         val title = s.title
         if (title.isEmpty()) return
-        _state.value = s.copy(season = season, episode = episode, playErr = "", playerErr = "", currentUrl = "")
+        _state.value = s.copy(
+            season = season, episode = episode,
+            playErr = "", playerErr = "", currentUrl = "", switching = true,
+        )
         viewModelScope.launch {
-            val r = App.source.resolveAny(title, episode, season)
+            val r = App.source.resolveAny(title, episode, season, excludeKeys = failedSites)
             if (r.ok) {
                 _state.value = _state.value.copy(
+                    switching = false,
                     episodes = r.episodes,
                     currentUrl = r.url,
                     currentLabel = r.label,
                     sourceName = r.sourceName,
+                    siteKey = r.siteKey,
+                    attempt = _state.value.attempt + 1,
                 )
             } else {
-                _state.value = _state.value.copy(playErr = r.err)
+                _state.value = _state.value.copy(switching = false, playErr = r.err)
             }
         }
     }
@@ -177,7 +244,13 @@ class PlayerViewModel : ViewModel() {
         if (eps.isEmpty()) { resolve(s.season, ep); return }
         val idx = ep - 1
         if (idx < 0 || idx >= eps.size) return
-        _state.value = s.copy(episode = ep, currentUrl = eps[idx].url, currentLabel = eps[idx].name.ifEmpty { "第${ep}集" }, playerErr = "")
+        _state.value = s.copy(
+            episode = ep,
+            currentUrl = eps[idx].url,
+            currentLabel = eps[idx].name.ifEmpty { "第${ep}集" },
+            playerErr = "",
+            attempt = s.attempt + 1,
+        )
     }
 
     fun changeSeason(season: Int, episode: Int = 1) {
@@ -194,11 +267,85 @@ class PlayerViewModel : ViewModel() {
         if (s.episode > 1) selectEpisode(s.episode - 1)
     }
 
-    fun markPlayerError(msg: String) {
-        _state.value = _state.value.copy(playerErr = msg)
+    /** 播放器出错回调：自动换源（最多3次） */
+    fun onPlayerFailed() {
+        val s = _state.value
+        if (s.currentUrl.isEmpty()) return
+        failCount++
+
+        if (type == "direct") {
+            // 直连模式：自动切换线路
+            val item = directItem
+            val lines = if (item != null) App.source.playLines(item) else emptyList()
+            if (failCount <= 2 && lines.size > 1) {
+                switchDirectLine()
+            } else {
+                _state.value = s.copy(playerErr = "播放失败，点击切换线路重试")
+            }
+            return
+        }
+
+        if (failCount > 3) {
+            _state.value = s.copy(playerErr = "多个播放源均失败，点击重试")
+            return
+        }
+        // 记录失败站点，自动换源
+        if (s.siteKey.isNotEmpty()) failedSites += s.siteKey
+        resolve(s.season, s.episode)
     }
 
+    /** 直连模式切换到下一条线路 */
+    private fun switchDirectLine() {
+        val item = directItem ?: return
+        val lines = App.source.playLines(item)
+        if (lines.isEmpty()) return
+        directLineIdx = (directLineIdx + 1).mod(lines.size)
+        val r = App.source.directResult(item, _state.value.episode, directLineIdx)
+        if (r.ok) {
+            _state.value = _state.value.copy(
+                episodes = r.episodes,
+                currentUrl = r.url,
+                currentLabel = r.label,
+                sourceName = r.sourceName,
+                siteKey = r.siteKey,
+                playerErr = "",
+                playErr = "",
+                switching = false,
+                attempt = _state.value.attempt + 1,
+            )
+        } else {
+            _state.value = _state.value.copy(playerErr = "播放失败，点击切换线路重试")
+        }
+    }
+
+    /** 手动重试（用户点击） */
     fun retry() {
+        failCount = 0
+        if (type == "direct") {
+            val item = directItem
+            if (item != null) {
+                val lines = App.source.playLines(item)
+                if (lines.size > 1) {
+                    switchDirectLine()
+                    return
+                }
+                val r = App.source.directResult(item, _state.value.episode, directLineIdx)
+                if (r.ok) {
+                    _state.value = _state.value.copy(
+                        currentUrl = r.url,
+                        currentLabel = r.label,
+                        playerErr = "",
+                        playErr = "",
+                        attempt = _state.value.attempt + 1,
+                    )
+                } else {
+                    _state.value = _state.value.copy(playErr = r.err)
+                }
+                return
+            }
+            _state.value = _state.value.copy(playerErr = "播放数据已过期，请重新搜索")
+            return
+        }
         resolve(_state.value.season, _state.value.episode)
     }
 }
@@ -230,8 +377,8 @@ fun PlayerScreen(
 
     var resumed by remember { mutableStateOf(false) }
 
-    // 播放地址变化 → 切换媒体源
-    LaunchedEffect(state.currentUrl) {
+    // 播放地址变化 → 切换媒体源（attempt 变化时强制重载）
+    LaunchedEffect(state.currentUrl, state.attempt) {
         val url = state.currentUrl
         if (url.isEmpty()) return@LaunchedEffect
         val item = MediaItem.Builder()
@@ -245,8 +392,9 @@ fun PlayerScreen(
         player.playWhenReady = true
     }
 
-    // 断点续播（仅首次）
+    // 断点续播（仅首次，直连模式跳过）
     LaunchedEffect(state.currentUrl, state.episode) {
+        if (type == "direct") return@LaunchedEffect
         if (state.currentUrl.isEmpty() || resumed) return@LaunchedEffect
         val h = App.db.historyDao().get(id, type)
         if (h != null && h.season == state.season && h.episode == state.episode && h.positionMs > 3000) {
@@ -269,7 +417,7 @@ fun PlayerScreen(
         }
     }
 
-    // 播放状态监听（结束自动下一集 / 错误提示）
+    // 播放状态监听（结束自动下一集 / 失败自动换源）
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -277,7 +425,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                vm.markPlayerError("播放失败：${error.errorCodeName}")
+                vm.onPlayerFailed()
             }
         }
         player.addListener(listener)
@@ -355,6 +503,28 @@ fun PlayerScreen(
                 IconButton(onClick = { vm.next() }, enabled = state.episode < state.episodes.size) {
                     Icon(Icons.Filled.KeyboardArrowRight, "下一集", tint = if (state.episode < state.episodes.size) Text2 else Text3)
                 }
+            }
+        }
+
+        // 自动换源中提示
+        if (state.switching) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Bg2)
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Primary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    "  播放失败，正在自动换源…",
+                    color = Text2,
+                    fontSize = 12.5.sp,
+                )
             }
         }
 

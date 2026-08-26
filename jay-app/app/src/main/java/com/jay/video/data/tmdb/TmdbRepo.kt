@@ -1,6 +1,10 @@
 package com.jay.video.data.tmdb
 
 import com.jay.video.data.Media
+import com.jay.video.data.SearchCard
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 /** TMDB 仓库：标准化数据 + 中文缺失时英文兜底 */
 class TmdbRepo(private val api: TmdbApi) {
@@ -71,6 +75,52 @@ class TmdbRepo(private val api: TmdbApi) {
     suspend fun search(wd: String, page: Int): Pair<List<Media>, Int> {
         val resp = api.search(wd, page)
         return normList(resp, limit = 24) to minOf(resp.totalPages, 500)
+    }
+
+    /** 详情原始响应（供分季展开等复用） */
+    suspend fun tvRaw(id: Int): DetailResponse? = try {
+        api.tvDetail(id, "zh-CN")
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * 搜索并展开分季卡片：
+     * TV 多季 → 每季一张卡（使用各季独立海报+年份）
+     * 电影 / 单季剧 → 一张主卡
+     */
+    suspend fun searchCards(wd: String, page: Int): Pair<List<SearchCard>, Int> {
+        val (list, totalPages) = search(wd, page)
+        val cards = mutableListOf<SearchCard>()
+        coroutineScope {
+            // 分批并发（每批6个，避免触发TMDB限流）
+            list.chunked(6).forEach { batch ->
+                val results = batch.map { m ->
+                    async {
+                        if (m.type != "tv") return@async listOf(SearchCard(m))
+                        val resp = runCatching { api.tvDetail(m.id, "zh-CN") }.getOrNull()
+                        val seasons = resp?.seasons
+                            ?.filter { it.seasonNumber > 0 && it.episodeCount > 0 }
+                            ?: emptyList()
+                        if (seasons.size > 1) {
+                            seasons.map { s ->
+                                SearchCard(
+                                    media = m,
+                                    season = s.seasonNumber,
+                                    seasonName = s.name ?: "第 ${s.seasonNumber} 季",
+                                    posterOverride = img(s.posterPath, "w500").ifEmpty { m.poster },
+                                    yearOverride = (s.airDate ?: "").take(4),
+                                )
+                            }
+                        } else {
+                            listOf(SearchCard(m))
+                        }
+                    }
+                }.awaitAll()
+                results.forEach { cards += it }
+            }
+        }
+        return cards to totalPages
     }
 
     /** 详情（中文简介缺失时英文兜底；TV 返回季列表） */

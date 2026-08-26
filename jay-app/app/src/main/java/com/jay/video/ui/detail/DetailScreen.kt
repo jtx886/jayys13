@@ -1,6 +1,7 @@
 package com.jay.video.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,12 +31,20 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +52,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,10 +66,14 @@ import com.jay.video.data.Episode
 import com.jay.video.data.MediaDetail
 import com.jay.video.data.PlayResult
 import com.jay.video.data.Season
+import com.jay.video.data.local.Favorite
+import com.jay.video.data.source.Site
+import com.jay.video.data.tmdb.TmdbRepo
 import com.jay.video.ui.components.LoadingBox
 import com.jay.video.ui.components.SectionTitle
 import com.jay.video.ui.theme.Bg
 import com.jay.video.ui.theme.Bg2
+import com.jay.video.ui.theme.BorderC
 import com.jay.video.ui.theme.Panel
 import com.jay.video.ui.theme.Primary
 import com.jay.video.ui.theme.Primary2
@@ -82,15 +96,19 @@ class DetailViewModel : ViewModel() {
         val favored: Boolean = false,
         val resumeEpisode: Int = 1,
         val resumeLabel: String = "",
+        val currentSiteKey: String = "",
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
+    /** 可选站点列表（换源用） */
+    val sites: List<Site> get() = App.source.enabledSites()
+
     private var type = "movie"
     private var id = 0
 
-    fun load(t: String, i: Int) {
+    fun load(t: String, i: Int, initialSeason: Int = 0) {
         if (type == t && id == i && _state.value.detail != null) return
         type = t
         id = i
@@ -104,15 +122,22 @@ class DetailViewModel : ViewModel() {
                 }
                 val seasons = (resp.seasons ?: emptyList())
                     .filter { it.seasonNumber > 0 && it.episodeCount > 0 }
-                    .map { Season(it.seasonNumber, it.name ?: "第 ${it.seasonNumber} 季", it.episodeCount) }
+                    .map {
+                        Season(
+                            number = it.seasonNumber,
+                            name = it.name ?: "第 ${it.seasonNumber} 季",
+                            episodeCount = it.episodeCount,
+                            poster = TmdbRepo.img(it.posterPath, "w300"),
+                        )
+                    }
                 val runtime = resp.runtime ?: resp.episodeRunTime?.firstOrNull() ?: 0
                 val detail = MediaDetail(
                     id = resp.id.toInt(),
                     type = t,
                     title = resp.title ?: resp.name ?: "",
                     orig = resp.originalTitle ?: resp.originalName ?: "",
-                    poster = com.jay.video.data.tmdb.TmdbRepo.img(resp.posterPath, "w500"),
-                    backdrop = com.jay.video.data.tmdb.TmdbRepo.img(resp.backdropPath, "w1280"),
+                    poster = TmdbRepo.img(resp.posterPath, "w500"),
+                    backdrop = TmdbRepo.img(resp.backdropPath, "w1280"),
                     score = kotlin.math.round(resp.voteAverage * 10) / 10,
                     year = (resp.releaseDate ?: resp.firstAirDate ?: "").take(4),
                     overview = resp.overview ?: "暂无简介",
@@ -124,40 +149,49 @@ class DetailViewModel : ViewModel() {
                             it.id.toInt(),
                             it.name ?: "",
                             it.character ?: "",
-                            com.jay.video.data.tmdb.TmdbRepo.img(it.profilePath, "w185"),
+                            TmdbRepo.img(it.profilePath, "w185"),
                         )
                     } ?: emptyList(),
                 )
-                // 收藏状态 / 观看进度
                 val favored = App.db.favoriteDao().count(id, type) > 0
                 val history = App.db.historyDao().get(id, type)
+                val initSeason = initialSeason
+                    .takeIf { s -> s > 0 && seasons.any { it.number == s } }
+                    ?: history?.season?.takeIf { s -> seasons.any { it.number == s } }
+                    ?: 1
                 _state.value = UiState(
                     loading = false,
                     detail = detail,
-                    season = history?.season?.takeIf { s -> seasons.any { it.number == s } } ?: 1,
+                    season = initSeason,
                     favored = favored,
                     resumeEpisode = history?.episode ?: 1,
                     resumeLabel = history?.episodeLabel ?: "",
                 )
-                resolve(_state.value.season, history?.episode ?: 1)
+                resolve(initSeason, history?.episode ?: 1)
             } catch (e: Exception) {
                 _state.value = UiState(loading = false, error = e.message ?: "加载失败")
             }
         }
     }
 
-    /** 解析当前季的播放资源 */
-    fun resolve(season: Int, episode: Int = 1) {
+    /** 解析当前季的播放资源（优先上次成功站点） */
+    fun resolve(season: Int, episode: Int = 1, siteKey: String? = null) {
         val d = _state.value.detail ?: return
+        val preferred = siteKey ?: _state.value.currentSiteKey.ifEmpty { null }
         _state.value = _state.value.copy(season = season, resolving = true, play = null, playErr = "")
         viewModelScope.launch {
-            val r = App.source.resolveAny(d.title, episode, season)
+            val r = App.source.resolveAny(d.title, episode, season, preferred)
             _state.value = if (r.ok) {
-                _state.value.copy(resolving = false, play = r)
+                _state.value.copy(resolving = false, play = r, currentSiteKey = r.siteKey)
             } else {
                 _state.value.copy(resolving = false, playErr = r.err)
             }
         }
+    }
+
+    /** 换源：用指定站点重新解析 */
+    fun changeSite(site: Site) {
+        resolve(_state.value.season, _state.value.resumeEpisode, site.key)
     }
 
     fun toggleFavorite() {
@@ -169,7 +203,7 @@ class DetailViewModel : ViewModel() {
                 _state.value = _state.value.copy(favored = false)
             } else {
                 dao.insert(
-                    com.jay.video.data.local.Favorite(
+                    Favorite(
                         mediaId = d.id,
                         mediaType = d.type,
                         title = d.title,
@@ -184,16 +218,19 @@ class DetailViewModel : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     type: String,
     id: Int,
+    initialSeason: Int = 0,
     onBack: () -> Unit,
     onPlay: (String, Int, Int, Int) -> Unit,
     vm: DetailViewModel = viewModel(),
 ) {
-    LaunchedEffect(type, id) { vm.load(type, id) }
+    LaunchedEffect(type, id, initialSeason) { vm.load(type, id, initialSeason) }
     val state by vm.state.collectAsStateWithLifecycle()
+    var showSiteSheet by remember { mutableStateOf(false) }
 
     if (state.loading) {
         LoadingBox(Modifier.fillMaxSize())
@@ -316,53 +353,94 @@ fun DetailScreen(
                 }
             }
 
-            // 播放按钮
-            val playLabel = if (state.resumeLabel.isNotEmpty()) "继续播放 · ${state.resumeLabel}" else "立即播放"
+            // 播放按钮 + 换源按钮
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Brush.horizontalGradient(listOf(Primary, Primary2)))
-                    .clickable {
-                        if (!state.resolving) onPlay(d.type, d.id, state.season, state.resumeEpisode)
-                    }
-                    .padding(vertical = 13.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                if (state.resolving) {
-                    androidx.compose.material3.CircularProgressIndicator(
-                        color = Color.White,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(16.dp),
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Brush.horizontalGradient(listOf(Primary, Primary2)))
+                        .clickable {
+                            if (!state.resolving) onPlay(d.type, d.id, state.season, state.resumeEpisode)
+                        }
+                        .padding(vertical = 13.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (state.resolving) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                        Text("  正在匹配播放源…", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    } else {
+                        Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        val playLabel = if (state.resumeLabel.isNotEmpty()) "继续播放 · ${state.resumeLabel}" else "立即播放"
+                        Text("  $playLabel", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+                // 换源按钮
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Bg2)
+                        .border(1.dp, BorderC, RoundedCornerShape(10.dp))
+                        .clickable { showSiteSheet = true }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(Icons.Filled.SwapHoriz, "换源", tint = Text2, modifier = Modifier.size(18.dp))
+                    Text(
+                        state.play?.sourceName?.take(4)?.ifEmpty { "换源" } ?: "换源",
+                        color = Text2,
+                        fontSize = 10.sp,
+                        maxLines = 1,
                     )
-                    Text("  正在匹配播放源…", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                } else {
-                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text("  $playLabel", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
-            // 季切换
+            // 季切换（海报卡片）
             if (d.type == "tv" && d.seasons.size > 1) {
                 SectionTitle("季切换", Modifier.padding(horizontal = 16.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(d.seasons, key = { it.number }) { s ->
                         val active = s.number == state.season
-                        Text(
-                            s.name,
-                            color = if (active) Color.White else Text2,
-                            fontSize = 12.5.sp,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(15.dp))
-                                .background(if (active) Primary else Bg2)
-                                .clickable { vm.resolve(s.number, 1) }
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
-                        )
+                                .width(72.dp)
+                                .clickable { vm.resolve(s.number, 1) },
+                        ) {
+                            AsyncImage(
+                                model = s.poster.ifEmpty { d.poster },
+                                contentDescription = s.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(2f / 3f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Panel)
+                                    .border(
+                                        width = if (active) 2.dp else 1.dp,
+                                        color = if (active) Primary else BorderC,
+                                        shape = RoundedCornerShape(8.dp),
+                                    ),
+                            )
+                            Text(
+                                s.name,
+                                color = if (active) Primary else Text2,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 5.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -389,7 +467,6 @@ fun DetailScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 } else {
-                    // 用固定高度网格（外层已垂直滚动）
                     val rows = (eps.size + 3) / 4
                     val gridHeight = (rows * 44).dp
                     LazyVerticalGrid(
@@ -416,7 +493,7 @@ fun DetailScreen(
                                     .clickable { onPlay(d.type, d.id, state.season, i + 1) }
                                     .padding(horizontal = 6.dp, vertical = 10.dp)
                                     .fillMaxWidth(),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
@@ -463,6 +540,54 @@ fun DetailScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // 换源面板
+    if (showSiteSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSiteSheet = false },
+            containerColor = Bg2,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Text(
+                    "选择播放源（${vm.sites.size}个可用）",
+                    color = Text1,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                vm.sites.forEach { site ->
+                    val active = site.key == state.currentSiteKey
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (active) Primary.copy(alpha = 0.12f) else Color.Transparent)
+                            .clickable {
+                                showSiteSheet = false
+                                vm.changeSite(site)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            site.name,
+                            color = if (active) Primary else Text1,
+                            fontSize = 14.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (site.builtin) {
+                            Text("内置", color = Text3, fontSize = 10.sp)
+                        }
+                        if (active) {
+                            Text("当前", color = Primary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }

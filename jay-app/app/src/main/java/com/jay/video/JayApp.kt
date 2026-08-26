@@ -3,9 +3,14 @@ package com.jay.video
 import android.app.Application
 import com.google.gson.Gson
 import com.jay.video.data.local.AppDatabase
-import com.jay.video.data.source.SourceRepo
+import com.jay.video.data.source.Prefs
+import com.jay.video.data.source.SiteRepo
 import com.jay.video.data.tmdb.TmdbApi
 import com.jay.video.data.tmdb.TmdbRepo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -20,8 +25,12 @@ object App {
         private set
     lateinit var tmdb: TmdbRepo
         private set
-    lateinit var source: SourceRepo
+    lateinit var source: SiteRepo
         private set
+    lateinit var gson: Gson
+        private set
+
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun init() {
         val plain = OkHttpClient.Builder()
@@ -56,9 +65,15 @@ object App {
             .build()
             .create(TmdbApi::class.java)
 
+        gson = Gson()
+        Prefs.init(CtxHolder.app)
         db = AppDatabase.build(CtxHolder.app)
         tmdb = TmdbRepo(api)
-        source = SourceRepo(plain, Gson())
+        source = SiteRepo(plain, gson)
+
+        // 恢复站点缓存 + 后台刷新用户配置
+        source.restoreFromCache()
+        appScope.launch { source.refreshConfigs() }
     }
 }
 
