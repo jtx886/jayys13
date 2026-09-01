@@ -66,6 +66,7 @@ import com.jay.video.data.DirectPlay
 import com.jay.video.data.Episode
 import com.jay.video.data.Season
 import com.jay.video.data.source.Prefs
+import com.jay.video.data.source.SpiderLoader
 import com.jay.video.data.source.VodItem
 import com.jay.video.ui.theme.Bg
 import com.jay.video.ui.theme.Bg2
@@ -77,7 +78,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.net.URLEncoder
 
 class PlayerViewModel : ViewModel() {
     data class UiState(
@@ -93,8 +93,11 @@ class PlayerViewModel : ViewModel() {
         val sourceName: String = "",
         val siteKey: String = "",
         val headers: Map<String, String> = emptyMap(),
-        val webOnly: Boolean = false,          // 需网页解析播放
+        val webOnly: Boolean = false,          // 需解析（影视仓 needParse）
         val webMode: Boolean = false,          // 当前为网页播放模式
+        val pageUrl: String = "",              // 待解析的原始地址（网页播放用）
+        val parseUrl: String = "",             // 解析前缀（spider playUrl，空则用用户解析器）
+        val sniffing: Boolean = false,         // 影视仓 ParseJob 嗅探中
         val playErr: String = "",
         val playerErr: String = "",
         val switching: Boolean = false,        // 正在自动换源
@@ -115,10 +118,12 @@ class PlayerViewModel : ViewModel() {
     private val failedSites = mutableSetOf<String>()
     private var failCount = 0
 
-    /** 网页播放地址（解析器 + 视频地址） */
+    /** 网页播放地址（影视仓 ParseJob：解析器 + 视频页地址 raw 拼接，不编码） */
     fun webPlayUrl(): String {
-        val url = _state.value.currentUrl
-        return Prefs.parseUrl() + URLEncoder.encode(url, "UTF-8")
+        val s = _state.value
+        val prefix = s.parseUrl.ifEmpty { Prefs.parseUrl() }
+        val target = s.pageUrl.ifEmpty { s.currentUrl }
+        return prefix + target
     }
 
     /** 保存观看历史（供播放页调用；直连模式不入库） */
@@ -191,13 +196,15 @@ class PlayerViewModel : ViewModel() {
         if (r.ok) {
             _state.value = _state.value.copy(
                 episodes = r.episodes,
-                currentUrl = r.url,
+                currentUrl = if (r.webOnly) "" else r.url,  // 需解析：嗅探成功后才设置真实地址
+                pageUrl = r.url,
+                parseUrl = r.parseUrl,
                 currentLabel = r.label,
                 sourceName = r.sourceName,
                 siteKey = r.siteKey,
                 headers = r.headers,
                 webOnly = r.webOnly,
-                webMode = r.webOnly,   // 非直链自动进入网页播放
+                webMode = false,
                 playerErr = "",
                 playErr = "",
                 switching = false,
@@ -206,6 +213,52 @@ class PlayerViewModel : ViewModel() {
         } else {
             _state.value = _state.value.copy(switching = false, playErr = r.err)
         }
+    }
+
+    /**
+     * 影视仓 ParseJob 流程：隐藏 WebView 嗅探真实播放地址
+     * 成功 → 系统播放器播放；失败 → 网页播放兜底（ffzyplay）
+     * 由 UI 层触发（需要 Activity 上下文挂载 WebView）
+     */
+    fun startSniff(context: android.content.Context) {
+        val s = _state.value
+        if (!s.webOnly || s.pageUrl.isEmpty() || s.sniffing || s.webMode) return
+        _state.value = s.copy(sniffing = true, playerErr = "")
+
+        // 解析前缀：spider playUrl 优先（影视仓 ParseJob.setParse），否则用户解析器（ffzyplay）
+        val prefix = s.parseUrl.ifEmpty { Prefs.parseUrl() }
+
+        // spider 站点用其自定义视频判定（影视仓 CustomWebView.isVideoFormat）
+        val site = App.source.siteOf(s.siteKey)
+        val videoCheck: ((String) -> Boolean)? =
+            if (App.source.isSpiderSite(site) && site != null) {
+                { url -> SpiderLoader.isVideoFormat(site.key, site.jarUrl, site.api, site.ext, url) }
+            } else {
+                null
+            }
+
+        com.jay.video.player.ParseSniffer.sniff(context, prefix, s.pageUrl, s.headers, videoCheck) { result ->
+            if (result.ok) onSniffOk(result.url, result.headers) else onSniffFail()
+        }
+    }
+
+    /** 嗅探成功：系统播放器播放真实地址 */
+    private fun onSniffOk(url: String, headers: Map<String, String>) {
+        val s = _state.value
+        if (!s.sniffing) return
+        _state.value = s.copy(
+            sniffing = false,
+            currentUrl = url,
+            headers = if (headers.isEmpty()) s.headers else headers,
+            attempt = s.attempt + 1,
+        )
+    }
+
+    /** 嗅探失败：网页播放兜底（ffzyplay 可视化播放） */
+    private fun onSniffFail() {
+        val s = _state.value
+        if (!s.sniffing) return
+        _state.value = s.copy(sniffing = false, webMode = true)
     }
 
     /** 直连播放模式：来自资源站搜索结果 */
@@ -240,15 +293,29 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
+    /** 开始重新解析：清空旧播放状态（避免嗅探不触发/播放旧地址） */
+    private fun beginResolve(s: UiState, ep: Int) {
+        _state.value = s.copy(
+            episode = ep,
+            currentUrl = "",
+            pageUrl = "",
+            parseUrl = "",
+            webOnly = false,
+            webMode = false,
+            sniffing = false,
+            playerErr = "",
+            playErr = "",
+            switching = true,
+        )
+    }
+
     /** 解析指定季+集的播放地址（自动换源时排除已失败站点） */
     private fun resolve(season: Int, episode: Int) {
         val s = _state.value
         val title = s.title
         if (title.isEmpty()) return
-        _state.value = s.copy(
-            season = season, episode = episode,
-            playErr = "", playerErr = "", currentUrl = "", switching = true, webMode = false,
-        )
+        _state.value = _state.value.copy(season = season)
+        beginResolve(_state.value, episode)
         viewModelScope.launch {
             val r = App.source.resolveAny(title, episode, season, excludeKeys = failedSites)
             applyResult(r)
@@ -263,7 +330,7 @@ class PlayerViewModel : ViewModel() {
         if (type == "direct") {
             val item = directItem
             if (item != null) {
-                _state.value = s.copy(episode = ep, playerErr = "", playErr = "", switching = true, webMode = false)
+                beginResolve(s, ep)
                 viewModelScope.launch {
                     val r = App.source.directResult(item, ep, directLineIdx)
                     applyResult(r)
@@ -279,7 +346,7 @@ class PlayerViewModel : ViewModel() {
         // spider 站点的剧集 url 是 playerContent id，需重新解析
         val site = App.source.siteOf(s.siteKey)
         if (App.source.isSpiderSite(site)) {
-            _state.value = s.copy(episode = ep, playerErr = "", switching = true, webMode = false)
+            beginResolve(s, ep)
             viewModelScope.launch {
                 val r = App.source.resolveAny(
                     s.title, ep, s.season,
@@ -293,6 +360,9 @@ class PlayerViewModel : ViewModel() {
         _state.value = s.copy(
             episode = ep,
             currentUrl = eps[idx].url,
+            pageUrl = eps[idx].url,
+            parseUrl = "",
+            webOnly = false,
             currentLabel = eps[idx].name.ifEmpty { "第${ep}集" },
             playerErr = "",
             webMode = false,
@@ -354,7 +424,7 @@ class PlayerViewModel : ViewModel() {
         val lines = App.source.playLines(item)
         if (lines.isEmpty()) return
         directLineIdx = (directLineIdx + 1).mod(lines.size)
-        _state.value = _state.value.copy(switching = true, playerErr = "")
+        beginResolve(_state.value, _state.value.episode)
         viewModelScope.launch {
             val r = App.source.directResult(item, _state.value.episode, directLineIdx)
             applyResult(r)
@@ -372,7 +442,7 @@ class PlayerViewModel : ViewModel() {
                     switchDirectLine()
                     return
                 }
-                _state.value = _state.value.copy(switching = true, playerErr = "")
+                beginResolve(_state.value, _state.value.episode)
                 viewModelScope.launch {
                     val r = App.source.directResult(item, _state.value.episode, directLineIdx)
                     applyResult(r)
@@ -469,6 +539,13 @@ fun PlayerScreen(
         if (state.webMode) player.pause() else if (state.currentUrl.isNotEmpty()) player.play()
     }
 
+    // 影视仓 ParseJob：需解析的地址触发嗅探（成功→系统播放器，失败→网页播放）
+    LaunchedEffect(state.webOnly, state.pageUrl, state.attempt) {
+        if (state.webOnly && state.pageUrl.isNotEmpty() && !state.webMode && state.currentUrl.isEmpty()) {
+            vm.startSniff(context)
+        }
+    }
+
     // 播放状态监听（结束自动下一集 / 失败自动换源）
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -546,8 +623,25 @@ fun PlayerScreen(
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = Color.White)
             }
+            // 影视仓嗅探解析中提示
+            if (state.sniffing) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(28.dp),
+                    )
+                    Text(
+                        "正在解析播放地址…",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
             // 网页播放切换按钮（悬浮右上）
-            if (state.currentUrl.isNotEmpty()) {
+            if (state.currentUrl.isNotEmpty() || (state.webOnly && state.pageUrl.isNotEmpty())) {
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)

@@ -57,7 +57,8 @@ data class PlayResult(
     val sourceName: String = "",
     val siteKey: String = "",
     val headers: Map<String, String> = emptyMap(),  // 播放请求头（spider playerContent 返回）
-    val webOnly: Boolean = false,                   // 需网页解析播放（parse=1 且非直链）
+    val webOnly: Boolean = false,                   // 需网页解析播放（影视仓 needParse）
+    val parseUrl: String = "",                      // 影视仓 playUrl（spider 指定解析前缀，空则用用户解析器）
 )
 
 /** 直连播放数据（资源站搜索 → 直接播放，跳过TMDB） */

@@ -79,7 +79,7 @@ object TvBoxConfigParser {
                 val o = el.asJsonObject
                 val key = o.str("key") ?: continue
                 val name = o.str("name") ?: key
-                val type = o.str("type")?.toIntOrNull() ?: 0
+                val type = o.intOrStr("type") ?: 0
                 var api = o.str("api") ?: o.str("apiUrl") ?: ""
 
                 // ext 可能是字符串或对象
@@ -102,9 +102,10 @@ object TvBoxConfigParser {
 
                 // ext 也可能指向一个 URL（type:0/1 的扩展配置），保持原样传给 spider
                 if (api.isBlank()) continue
-                val searchable = o.str("searchable")?.let { it != "0" } ?: true
+                // searchable 支持数字/字符串（影视仓：0=禁用 2=快捷搜索）
+                val searchable = o.intOrStr("searchable")?.let { it != 0 } ?: true
 
-                // type:3 站点绑定配置级 spider jar
+                // type:3 站点绑定 spider jar（站点级 jar 优先于配置级）
                 val jar = if (type == 3) (o.str("jar") ?: spiderJar) else ""
 
                 sites += Site(
@@ -128,5 +129,15 @@ object TvBoxConfigParser {
             if (v.isJsonPrimitive) return v.asString
         }
         return null
+    }
+
+    /** 数字或数字字符串字段（type/searchable 等影视仓配置常为数字类型） */
+    private fun JsonObject.intOrStr(key: String): Int? {
+        val v = get(key) ?: return null
+        return when {
+            v.isJsonPrimitive -> runCatching { v.asInt }.getOrNull()
+                ?: v.asString?.trim()?.toIntOrNull()
+            else -> null
+        }
     }
 }

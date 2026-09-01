@@ -519,8 +519,10 @@ class SiteRepo(
     /* ---------- spider 播放解析 ---------- */
 
     /**
-     * spider 站点播放地址解析：
-     * episode.url 是 playerContent 的 id，需二次解析为真实地址
+     * spider 站点播放地址解析（影视仓 SiteApi.playerContent + Result.needParse 逻辑）：
+     * - episode.url 是 playerContent 的 id，先调 spider.playerContent(flag, id, flags)
+     * - needParse = parse==1 || jx==1；或 url 非视频直链 → 网页解析（ffzyplay）
+     * - spider 返回 playUrl 时优先作为解析前缀（影视仓 ParseJob.setParse）
      */
     private suspend fun resolveSpiderPlay(
         site: Site, flag: String, id: String, label: String,
@@ -531,6 +533,9 @@ class SiteRepo(
             try {
                 val obj = JsonParser.parseString(raw).asJsonObject
                 val url = obj.str("url") ?: ""
+                val playUrl = obj.str("playUrl") ?: ""
+                val parse = obj.int("parse")
+                val jx = obj.int("jx")
                 val headers = mutableMapOf<String, String>()
                 obj.get("header")?.takeIf { it.isJsonObject }?.asJsonObject?.let { h ->
                     for ((k, v) in h.entrySet()) {
@@ -538,7 +543,9 @@ class SiteRepo(
                     }
                 }
                 if (url.isNotEmpty()) {
-                    val direct = isDirectUrl(url)
+                    // 影视仓 needParse()：parse==1 || jx==1；直链判定用 Sniffer.isVideoFormat
+                    val needParse = parse == 1 || jx == 1
+                    val direct = !needParse && Sniffer.isVideoFormat(url) && playUrl.isEmpty()
                     return PlayResult(
                         ok = true,
                         url = url,
@@ -548,7 +555,8 @@ class SiteRepo(
                         sourceName = site.name,
                         siteKey = site.key,
                         headers = headers,
-                        webOnly = !direct,  // 非直链 → 网页解析播放（ffzyplay）
+                        webOnly = !direct,           // 需解析 → 嗅探/网页播放（ffzyplay）
+                        parseUrl = playUrl,           // 影视仓 playUrl（spider 指定解析器）
                     )
                 }
             } catch (e: Exception) {
@@ -749,7 +757,22 @@ class SiteRepo(
             return resolveSpiderPlay(site, line.label, chosen.url, chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" }, line.episodes, item.name)
         }
 
-        if (!validMediaUrl(chosen.url, site.api)) return fail("「${site.name}」播放直链不可用")
+        // CMS 站点（影视仓 SiteApi:184）：非视频直链 → 解析播放
+        if (!validMediaUrl(chosen.url, site.api) || !Sniffer.isVideoFormat(chosen.url)) {
+            if (chosen.url.startsWith("http")) {
+                return PlayResult(
+                    ok = true,
+                    url = chosen.url,
+                    label = chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" },
+                    episodes = line.episodes,
+                    name = item.name,
+                    sourceName = site.name,
+                    siteKey = site.key,
+                    webOnly = true,
+                )
+            }
+            return fail("「${site.name}」播放直链不可用")
+        }
 
         return PlayResult(
             ok = true,
@@ -826,6 +849,23 @@ class SiteRepo(
             )
         }
 
+        // CMS 站点：非视频直链 → 解析播放（影视仓逻辑）
+        if (!chosen.url.startsWith("http") || (!validMediaUrl(chosen.url, site?.api ?: "") && !Sniffer.isVideoFormat(chosen.url))) {
+            if (chosen.url.startsWith("http")) {
+                return PlayResult(
+                    ok = true,
+                    url = chosen.url,
+                    label = chosen.name.ifEmpty { "第${maxOf(episode, 1)}集" },
+                    episodes = line.episodes,
+                    name = item.name,
+                    sourceName = item.siteName,
+                    siteKey = item.siteKey,
+                    webOnly = true,
+                )
+            }
+            return PlayResult(ok = false, err = "播放地址不可用", sourceName = item.siteName, siteKey = item.siteKey)
+        }
+
         return PlayResult(
             ok = true,
             url = chosen.url,
@@ -845,5 +885,10 @@ class SiteRepo(
             if (v.isJsonPrimitive) return v.asString
         }
         return null
+    }
+
+    private fun JsonObject.int(key: String): Int {
+        val v = get(key) ?: return 0
+        return runCatching { v.asInt }.getOrDefault(0)
     }
 }
